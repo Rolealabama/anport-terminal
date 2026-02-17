@@ -1,0 +1,7 @@
+{
+  "name": "AnPort",
+  "description": "Plataforma corporativa de gestão para varejo, com automação de rotinas, checklists de auditoria, modo offline e relatórios de produtividade em tempo real.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}

@@ -1,0 +1,14 @@
+# Prettier Ignore File
+node_modules/
+dist/
+coverage/
+build/
+.next/
+out/
+.env
+.env.local
+*.log
+*.swp
+*.swo
+*~
+.DS_Store

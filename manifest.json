@@ -1,0 +1,18 @@
+
+{
+  "short_name": "ECommTerminal",
+  "name": "AnPort",
+  "description": "Sistema de Gestão Operacional e Kanban para Mercados",
+  "icons": [
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/3225/3225191.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "any maskable"
+    }
+  ],
+  "start_url": ".",
+  "display": "standalone",
+  "theme_color": "#020617",
+  "background_color": "#020617"
+}

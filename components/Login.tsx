@@ -48,9 +48,12 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
         return null;
       };
 
-      // 1. MASTER DEV BYPASS
-      if (normalizedUser === 'superadmin' && password === 'master123') {
-        onLogin({ username: 'superadmin', role: Role.DEV, name: 'SISTEMA / DEV', storeId: 'GLOBAL' });
+      // 1. MASTER DEV BYPASS (Via Environment Variables)
+      const SUPERADMIN_USER = import.meta.env.VITE_SUPERADMIN_USERNAME || 'superadmin';
+      const SUPERADMIN_PASS = import.meta.env.VITE_SUPERADMIN_PASSWORD || 'master123';
+      
+      if (normalizedUser === SUPERADMIN_USER && password === SUPERADMIN_PASS) {
+        onLogin({ username: SUPERADMIN_USER, role: Role.DEV, name: 'SISTEMA / DEV', storeId: 'GLOBAL' });
         return;
       }
 

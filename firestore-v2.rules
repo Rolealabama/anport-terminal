@@ -1,0 +1,335 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // ==================== FUNÇÕES HELPER ====================
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function getUserId() {
+      return request.auth.uid;
+    }
+    
+    function getUser() {
+      return get(/databases/$(database)/documents/users/$(getUserId())).data;
+    }
+    
+    function getCompanyId() {
+      return getUser().companyId;
+    }
+    
+    function isActive() {
+      return getUser().status == 'active';
+    }
+    
+    function hasPermission(permission) {
+      let roleId = getUser().roleId;
+      let role = get(/databases/$(database)/documents/roles/$(roleId)).data;
+      return permission in role.permissions;
+    }
+    
+    function isSameCompany(companyId) {
+      return getCompanyId() == companyId;
+    }
+    
+    function isSubordinate(targetUserId) {
+      let targetUser = get(/databases/$(database)/documents/users/$(targetUserId)).data;
+      return getUserId() in targetUser.hierarchyPath;
+    }
+    
+    function isSuperior(targetUserId) {
+      let myPath = getUser().hierarchyPath;
+      return targetUserId in myPath;
+    }
+    
+    function isSameHierarchyLevel(targetUserId) {
+      let targetUser = get(/databases/$(database)/documents/users/$(targetUserId)).data;
+      return getUser().hierarchyLevel == targetUser.hierarchyLevel;
+    }
+    
+    function isDepartmentLeader(departmentId) {
+      let dept = get(/databases/$(database)/documents/departments/$(departmentId)).data;
+      return dept.leaderId == getUserId() || dept.fallbackLeaderId == getUserId();
+    }
+    
+    // ==================== COMPANIES ====================
+    
+    match /companies/{companyId} {
+      // Apenas o dono ou admins podem ler
+      allow read: if isAuthenticated() && (
+        resource.data.ownerId == getUserId() ||
+        hasPermission('company.config')
+      );
+      
+      // Apenas superadmin do sistema pode criar empresas
+      allow create: if isAuthenticated() && hasPermission('company.config');
+      
+      // Apenas dono ou admins podem atualizar
+      allow update: if isAuthenticated() && (
+        resource.data.ownerId == getUserId() ||
+        hasPermission('company.config')
+      );
+      
+      // Empresas nunca são deletadas, apenas desativadas
+      allow delete: if false;
+    }
+    
+    // ==================== DEPARTMENTS ====================
+    
+    match /departments/{departmentId} {
+      // Todos da empresa podem ler departamentos
+      allow read: if isAuthenticated() && 
+        isActive() && 
+        isSameCompany(resource.data.companyId);
+      
+      // Apenas quem tem permissão pode criar
+      allow create: if isAuthenticated() && 
+        isActive() &&
+        hasPermission('dept.create') &&
+        isSameCompany(request.resource.data.companyId);
+      
+      // Apenas quem tem permissão pode editar
+      allow update: if isAuthenticated() && 
+        isActive() &&
+        hasPermission('dept.edit') &&
+        isSameCompany(resource.data.companyId);
+      
+      // Apenas quem tem permissão pode deletar (soft delete)
+      allow delete: if isAuthenticated() && 
+        hasPermission('dept.delete') &&
+        isSameCompany(resource.data.companyId);
+    }
+    
+    // ==================== ROLES ====================
+    
+    match /roles/{roleId} {
+      // Todos da empresa podem ler roles
+      allow read: if isAuthenticated() && 
+        isActive() &&
+        isSameCompany(resource.data.companyId);
+      
+      // Apenas quem tem permissão pode criar
+      allow create: if isAuthenticated() && 
+        isActive() &&
+        hasPermission('role.create') &&
+        isSameCompany(request.resource.data.companyId);
+      
+      // Apenas quem tem permissão pode editar (exceto roles de sistema)
+      allow update: if isAuthenticated() && 
+        isActive() &&
+        hasPermission('role.edit') &&
+        isSameCompany(resource.data.companyId) &&
+        !resource.data.isSystemRole;
+      
+      // Roles de sistema não podem ser deletadas
+      allow delete: if isAuthenticated() && 
+        hasPermission('role.delete') &&
+        isSameCompany(resource.data.companyId) &&
+        !resource.data.isSystemRole;
+    }
+    
+    // ==================== USERS ====================
+    
+    match /users/{userId} {
+      // Usuário pode ler-se
+      // Ou quem tem permissão de ver todos
+      // Ou superiores podem ver subordinados
+      allow read: if isAuthenticated() && isActive() && (
+        userId == getUserId() ||
+        hasPermission('user.view.all') ||
+        (hasPermission('user.view.down') && isSubordinate(userId)) ||
+        isSameCompany(resource.data.companyId)
+      );
+      
+      // Apenas quem tem permissão pode criar usuários
+      allow create: if isAuthenticated() && 
+        isActive() &&
+        hasPermission('user.create') &&
+        isSameCompany(request.resource.data.companyId);
+      
+      // Usuário pode atualizar alguns campos próprios
+      // Ou quem tem permissão pode editar
+      allow update: if isAuthenticated() && isActive() && (
+        (userId == getUserId() && onlyUpdatingAllowedFields()) ||
+        (hasPermission('user.edit') && isSameCompany(resource.data.companyId))
+      );
+      
+      // Usuários nunca são deletados, apenas desativados
+      allow delete: if false;
+    }
+    
+    function onlyUpdatingAllowedFields() {
+      let allowedFields = ['name', 'avatar', 'phone', 'timezone', 'isOnline', 'lastSeenAt'];
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(allowedFields);
+    }
+    
+    // ==================== TASKS ====================
+    
+    match /tasks_v2/{taskId} {
+      // Pode ler se:
+      // - Tarefa atribuída a você
+      // - Tarefa atribuída ao seu departamento
+      // - Você é superior de quem está atribuído
+      // - Você criou a tarefa
+      // - Você tem permissão de ver tarefas
+      allow read: if isAuthenticated() && isActive() && (
+        resource.data.assignedToUserId == getUserId() ||
+        (resource.data.assignedToDepartmentId == getUser().departmentId) ||
+        resource.data.createdById == getUserId() ||
+        (hasPermission('board.view.down') && resource.data.assignedToUserId != null && isSubordinate(resource.data.assignedToUserId)) ||
+        hasPermission('board.view.dept')
+      ) && isSameCompany(resource.data.companyId);
+      
+      // Criar tarefa é validado no backend (muito complexo para rules)
+      // Mas verificamos empresa e status ativo
+      allow create: if isAuthenticated() && 
+        isActive() &&
+        isSameCompany(request.resource.data.companyId) &&
+        request.resource.data.createdById == getUserId();
+      
+      // Atualizar tarefa (movimentação no Kanban)
+      // - Dono pode atualizar sua tarefa
+      // - Líder pode atualizar tarefas do departamento
+      // - Quem tem permissão pode editar tarefas de subordinados
+      allow update: if isAuthenticated() && isActive() && (
+        (resource.data.assignedToUserId == getUserId() && hasPermission('board.move.own')) ||
+        (resource.data.assignedToDepartmentId != null && 
+         isDepartmentLeader(resource.data.assignedToDepartmentId) && 
+         hasPermission('board.move.dept')) ||
+        (hasPermission('task.edit.down') && isSubordinate(resource.data.assignedToUserId))
+      ) && isSameCompany(resource.data.companyId);
+      
+      // Deletar tarefa
+      allow delete: if isAuthenticated() && isActive() && (
+        (resource.data.assignedToUserId == getUserId() && hasPermission('task.delete.own')) ||
+        hasPermission('task.delete.any')
+      ) && isSameCompany(resource.data.companyId);
+    }
+    
+    // ==================== TASK COMMENTS ====================
+    
+    match /task_comments/{commentId} {
+      // Pode ler comentários de tarefas que você pode ver
+      allow read: if isAuthenticated() && isActive() && (
+        canReadTask(resource.data.taskId)
+      );
+      
+      // Qualquer um pode comentar em tarefas que vê
+      allow create: if isAuthenticated() && 
+        isActive() &&
+        canReadTask(request.resource.data.taskId) &&
+        request.resource.data.userId == getUserId();
+      
+      // Apenas autor pode editar comentário
+      allow update: if isAuthenticated() && 
+        resource.data.userId == getUserId();
+      
+      // Apenas autor ou admin pode deletar
+      allow delete: if isAuthenticated() && (
+        resource.data.userId == getUserId() ||
+        hasPermission('task.delete.any')
+      );
+    }
+    
+    function canReadTask(taskId) {
+      let task = get(/databases/$(database)/documents/tasks_v2/$(taskId)).data;
+      return task.assignedToUserId == getUserId() ||
+        task.assignedToDepartmentId == getUser().departmentId ||
+        task.createdById == getUserId();
+    }
+    
+    // ==================== DEPARTMENT COMMUNICATIONS ====================
+    
+    match /department_communications/{commId} {
+      // Todos da empresa podem ler regras de comunicação
+      allow read: if isAuthenticated() && 
+        isActive() &&
+        isSameCompany(resource.data.companyId);
+      
+      // Apenas admins podem criar/editar regras
+      allow create, update: if isAuthenticated() && 
+        isActive() &&
+        hasPermission('company.config') &&
+        isSameCompany(request.resource.data.companyId);
+      
+      allow delete: if isAuthenticated() && 
+        hasPermission('company.config');
+    }
+    
+    // ==================== AUDIT LOGS ====================
+    
+    match /audit_logs/{logId} {
+      // Apenas admins e quem tem permissão podem ler logs
+      allow read: if isAuthenticated() && 
+        isActive() &&
+        hasPermission('company.analytics') &&
+        isSameCompany(resource.data.companyId);
+      
+      // Sistema cria logs (via backend)
+      allow create: if isAuthenticated() && 
+        isSameCompany(request.resource.data.companyId);
+      
+      // Logs são imutáveis
+      allow update, delete: if false;
+    }
+    
+    // ==================== REALTIME NOTIFICATIONS ====================
+    
+    match /realtime_notifications/{notificationId} {
+      // Usuário pode ler suas próprias notificações
+      allow read: if isAuthenticated() && 
+        isActive() &&
+        resource.data.userId == getUserId();
+      
+      // Sistema cria notificações
+      allow create: if isAuthenticated();
+      
+      // Usuário pode marcar como lida
+      allow update: if isAuthenticated() && 
+        resource.data.userId == getUserId() &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
+      
+      // Usuário pode deletar suas notificações
+      allow delete: if isAuthenticated() && 
+        resource.data.userId == getUserId();
+    }
+    
+    // ==================== DISTRIBUTED LOCKS ====================
+    
+    match /distributed_locks/{lockId} {
+      // Locks são internos do sistema
+      allow read: if isAuthenticated();
+      
+      // Sistema gerencia locks
+      allow create, update: if isAuthenticated();
+      
+      // Auto-expira ou é removido pelo dono
+      allow delete: if isAuthenticated() && (
+        resource.data.ownerId == getUserId() ||
+        resource.data.expiresAt < request.time.toMillis()
+      );
+    }
+    
+    // ==================== USER SESSIONS ====================
+    
+    match /user_sessions/{sessionId} {
+      // Usuário pode ler suas próprias sessões
+      allow read: if isAuthenticated() && 
+        resource.data.userId == getUserId();
+      
+      // Sistema cria sessões
+      allow create: if isAuthenticated() && 
+        request.resource.data.userId == getUserId();
+      
+      // Sistema atualiza sessões
+      allow update: if isAuthenticated() && 
+        resource.data.userId == getUserId();
+      
+      // Usuário pode deletar suas sessões (logout)
+      allow delete: if isAuthenticated() && 
+        resource.data.userId == getUserId();
+    }
+  }
+}

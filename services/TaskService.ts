@@ -284,6 +284,65 @@ export class TaskService {
   }
 
   /**
+   * Move tarefa para novo status (com versionamento otimista)
+   */
+  static async moveTask(
+    taskId: string,
+    newStatus: TaskStatus,
+    expectedVersion: number
+  ): Promise<{ success: boolean; error?: string }> {
+    try {
+      const taskRef = doc(db, 'tasks_v2', taskId);
+      const taskSnap = await getDoc(taskRef);
+      
+      if (!taskSnap.exists()) {
+        return { success: false, error: 'Tarefa não encontrada' };
+      }
+
+      const task = taskSnap.data() as Task;
+
+      // Valida versão (controle otimista)
+      if (task.version !== expectedVersion) {
+        return {
+          success: false,
+          error: `Conflito de versão! Esperado: ${expectedVersion}, Atual: ${task.version}`
+        };
+      }
+
+      // Valida transição de status
+      const validTransitions: Record<TaskStatus, TaskStatus[]> = {
+        [TaskStatus.TODO]: [TaskStatus.IN_PROGRESS, TaskStatus.BLOCKED],
+        [TaskStatus.IN_PROGRESS]: [TaskStatus.REVIEW, TaskStatus.BLOCKED, TaskStatus.TODO],
+        [TaskStatus.REVIEW]: [TaskStatus.DONE, TaskStatus.IN_PROGRESS, TaskStatus.BLOCKED],
+        [TaskStatus.DONE]: [],
+        [TaskStatus.BLOCKED]: [TaskStatus.TODO, TaskStatus.IN_PROGRESS]
+      };
+
+      if (!validTransitions[task.status]?.includes(newStatus)) {
+        return {
+          success: false,
+          error: `Transição inválida: ${task.status} → ${newStatus}`
+        };
+      }
+
+      // Atualiza tarefa
+      await updateDoc(taskRef, {
+        status: newStatus,
+        version: task.version + 1,
+        'metadata.lastMovedAt': Date.now()
+      });
+
+      return { success: true };
+    } catch (error) {
+      console.error('Erro ao mover tarefa:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Erro desconhecido'
+      };
+    }
+  }
+
+  /**
    * Completa tarefa
    */
   static async completeTask(

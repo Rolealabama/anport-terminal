@@ -436,6 +436,26 @@ export class TaskService {
     }
   }
 
+  /**
+   * Atualiza uma tarefa existente
+   */
+  static async updateTask(
+    taskId: string,
+    updates: Partial<Task>
+  ): Promise<{ success: boolean; error?: string }> {
+    try {
+      const taskRef = doc(db, 'tasks', taskId);
+      await updateDoc(taskRef, {
+        ...updates,
+        'metadata.updatedAt': Date.now()
+      });
+      return { success: true };
+    } catch (error) {
+      console.error('Erro ao atualizar tarefa:', error);
+      return { success: false, error: String(error) };
+    }
+  }
+
   private static async getUser(userId: string): Promise<User | null> {
     try {
       const userDoc = await getDoc(doc(db, 'users', userId));

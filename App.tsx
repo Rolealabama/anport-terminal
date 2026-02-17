@@ -24,7 +24,6 @@ import UserTicketCreation from './components/UserTicketCreation.tsx';
 import MyTickets from './components/MyTickets.tsx';
 import DevSupportManagement from './components/DevSupportManagement.tsx';
 import Organograma from './components/Organograma.tsx';
-import PermissionsDashboard from './components/PermissionsDashboard.tsx';
 import AdminUserManagement from './components/AdminUserManagement.tsx';
 import { initializePushNotifications } from './services/PushNotificationService.ts';
 
@@ -43,7 +42,7 @@ const App: React.FC = () => {
   const [tasksV2, setTasksV2] = useState<TaskV2[]>([]);
   const [isAuthorizationLoading, setIsAuthorizationLoading] = useState(false);
   
-  const [activeTab, setActiveTab] = useState<'tasks' | 'team' | 'feedback' | 'reports' | 'support' | 'mytickets' | 'dev-support' | 'kanban-v2' | 'permissions' | 'organization'>('tasks');
+  const [activeTab, setActiveTab] = useState<'tasks' | 'team' | 'feedback' | 'reports' | 'support' | 'mytickets' | 'dev-support' | 'kanban-v2' | 'organization'>('tasks');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isModalV2Open, setIsModalV2Open] = useState(false);
   const [isTeamModalOpen, setIsTeamModalOpen] = useState(false);
@@ -423,13 +422,6 @@ const App: React.FC = () => {
               <Organograma
                 companyId={user.companyId || ''}
                 userId={user.username || user.name}
-              />
-            )}
-
-            {activeTab === 'permissions' && (
-              <PermissionsDashboard
-                userId={user.username || user.name}
-                userPermissions={userPermissions}
               />
             )}
 

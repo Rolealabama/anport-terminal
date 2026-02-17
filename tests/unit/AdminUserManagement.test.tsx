@@ -132,7 +132,7 @@ describe('AdminUserManagement', () => {
 
   it('has proper modal z-index', () => {
     const { container } = render(<AdminUserManagement {...defaultProps} />);
-    const outerDiv = container.firstChild;
+    const outerDiv = container.firstChild as HTMLElement;
     expect(outerDiv?.className).toContain('z-50');
   });
 });

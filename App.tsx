@@ -9,6 +9,7 @@ import { TaskService } from './services/TaskService.ts';
 import { RealtimeService } from './services/RealtimeService.ts';
 import Login from './components/Login.tsx';
 import KanbanBoard from './components/KanbanBoard.tsx';
+import KanbanBoardV2 from './components/KanbanBoardV2.tsx';
 import AdminStats from './components/AdminStats.tsx';
 import TeamBoard from './components/TeamBoard.tsx';
 import NewTaskModal from './components/NewTaskModal.tsx';
@@ -22,6 +23,9 @@ import SupportDashboard from './components/SupportDashboard.tsx';
 import UserTicketCreation from './components/UserTicketCreation.tsx';
 import MyTickets from './components/MyTickets.tsx';
 import DevSupportManagement from './components/DevSupportManagement.tsx';
+import Organograma from './components/Organograma.tsx';
+import PermissionsDashboard from './components/PermissionsDashboard.tsx';
+import AdminUserManagement from './components/AdminUserManagement.tsx';
 import { initializePushNotifications } from './services/PushNotificationService.ts';
 
 const App: React.FC = () => {
@@ -39,10 +43,11 @@ const App: React.FC = () => {
   const [tasksV2, setTasksV2] = useState<TaskV2[]>([]);
   const [isAuthorizationLoading, setIsAuthorizationLoading] = useState(false);
   
-  const [activeTab, setActiveTab] = useState<'tasks' | 'team' | 'feedback' | 'reports' | 'support' | 'mytickets' | 'dev-support'>('tasks');
+  const [activeTab, setActiveTab] = useState<'tasks' | 'team' | 'feedback' | 'reports' | 'support' | 'mytickets' | 'dev-support' | 'kanban-v2' | 'permissions' | 'organization'>('tasks');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isModalV2Open, setIsModalV2Open] = useState(false);
   const [isTeamModalOpen, setIsTeamModalOpen] = useState(false);
+  const [isAdminUserModalOpen, setIsAdminUserModalOpen] = useState(false);
   const [completingTaskId, setCompletingTaskId] = useState<string | null>(null);
 
   // Sincronização em Tempo Real com Firestore
@@ -285,7 +290,10 @@ const App: React.FC = () => {
             {user.role === Role.DEV && <button onClick={() => setActiveTab('dev-support')} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all ${activeTab === 'dev-support' ? 'bg-purple-600 text-white' : 'text-slate-500 hover:text-slate-300'}`}>🆘 Suporte</button>}
             {user.role === Role.SUPPORT && canCreateCompanies && <button onClick={() => setActiveTab('tasks')} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all ${activeTab === 'tasks' ? 'bg-blue-600 text-white' : 'text-slate-500 hover:text-slate-300'}`}>📊 Empresas</button>}
             {user.role !== Role.DEV && user.role !== Role.SUPPORT && <button onClick={() => setActiveTab('tasks')} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all ${activeTab === 'tasks' ? 'bg-blue-600 text-white' : 'text-slate-500 hover:text-slate-300'}`}>Operação</button>}
+            {user.role !== Role.DEV && user.role !== Role.SUPPORT && <button onClick={() => setActiveTab('kanban-v2')} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all ${activeTab === 'kanban-v2' ? 'bg-purple-600 text-white' : 'text-slate-500 hover:text-slate-300'}`}>✨ V2.0</button>}
             {user.role !== Role.DEV && user.role !== Role.SUPPORT && <button onClick={() => setActiveTab('team')} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all ${activeTab === 'team' ? 'bg-blue-600 text-white' : 'text-slate-500 hover:text-slate-300'}`}>Equipe</button>}
+            {user.role !== Role.DEV && user.role !== Role.SUPPORT && <button onClick={() => setActiveTab('organization')} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all ${activeTab === 'organization' ? 'bg-blue-600 text-white' : 'text-slate-500 hover:text-slate-300'}`}>🏢 Org.</button>}
+            {user.role === Role.ADMIN && <button onClick={() => setIsAdminUserModalOpen(true)} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all text-slate-500 hover:text-slate-300`}>👥 Usuários</button>}
             {user.role !== Role.DEV && user.role !== Role.SUPPORT && <button onClick={() => setActiveTab('reports')} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all ${activeTab === 'reports' ? 'bg-blue-600 text-white' : 'text-slate-500 hover:text-slate-300'}`}>Relatórios</button>}
             {user.role !== Role.DEV && user.role !== Role.SUPPORT && <button onClick={() => setActiveTab('feedback')} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all ${activeTab === 'feedback' ? 'bg-blue-600 text-white' : 'text-slate-500 hover:text-slate-300'}`}>Ouvidoria</button>}
             {user.role === Role.SUPPORT && <button onClick={() => setActiveTab('support')} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all ${activeTab === 'support' ? 'bg-blue-600 text-white' : 'text-slate-500 hover:text-slate-300'}`}>Meus Tickets</button>}
@@ -338,7 +346,9 @@ const App: React.FC = () => {
             
             <div className="flex md:hidden bg-slate-900 p-1 rounded-2xl border border-slate-800 overflow-x-auto gap-1">
                {user.role !== Role.SUPPORT && <button onClick={() => setActiveTab('tasks')} className={`flex-1 py-3 px-4 whitespace-nowrap text-[10px] font-black uppercase rounded-xl transition-all ${activeTab === 'tasks' ? 'bg-blue-600 text-white' : 'text-slate-500'}`}>Operação</button>}
+               {user.role !== Role.SUPPORT && <button onClick={() => setActiveTab('kanban-v2')} className={`flex-1 py-3 px-4 whitespace-nowrap text-[10px] font-black uppercase rounded-xl transition-all ${activeTab === 'kanban-v2' ? 'bg-purple-600 text-white' : 'text-slate-500'}`}>✨ V2</button>}
                {user.role !== Role.SUPPORT && <button onClick={() => setActiveTab('team')} className={`flex-1 py-3 px-4 whitespace-nowrap text-[10px] font-black uppercase rounded-xl transition-all ${activeTab === 'team' ? 'bg-blue-600 text-white' : 'text-slate-500'}`}>Equipe</button>}
+               {user.role !== Role.SUPPORT && <button onClick={() => setActiveTab('organization')} className={`flex-1 py-3 px-4 whitespace-nowrap text-[10px] font-black uppercase rounded-xl transition-all ${activeTab === 'organization' ? 'bg-blue-600 text-white' : 'text-slate-500'}`}>Org.</button>}
                {user.role !== Role.SUPPORT && <button onClick={() => setActiveTab('reports')} className={`flex-1 py-3 px-4 whitespace-nowrap text-[10px] font-black uppercase rounded-xl transition-all ${activeTab === 'reports' ? 'bg-blue-600 text-white' : 'text-slate-500'}`}>Dados</button>}
                {user.role !== Role.SUPPORT && <button onClick={() => setActiveTab('feedback')} className={`flex-1 py-3 px-4 whitespace-nowrap text-[10px] font-black uppercase rounded-xl transition-all ${activeTab === 'feedback' ? 'bg-blue-600 text-white' : 'text-slate-500'}`}>Avisos</button>}
                {user.role === Role.SUPPORT && <button onClick={() => setActiveTab('support')} className={`flex-1 py-3 px-4 whitespace-nowrap text-[10px] font-black uppercase rounded-xl transition-all ${activeTab === 'support' ? 'bg-blue-600 text-white' : 'text-slate-500'}`}>Meus Tickets</button>}
@@ -381,6 +391,46 @@ const App: React.FC = () => {
                   teamMembers={teamMembers.map(m => m.name)}
                 />
               </div>
+            )}
+
+            {activeTab === 'kanban-v2' && (
+              <div className="space-y-6">
+                <div className="flex justify-between items-center bg-slate-900/50 p-4 md:p-6 rounded-3xl border border-slate-800">
+                  <h2 className="text-lg md:text-xl font-black uppercase tracking-tighter">Fluxo V2.0</h2>
+                  <button 
+                    onClick={() => setIsModalV2Open(true)} 
+                    className="bg-purple-600 hover:bg-purple-700 text-white px-5 py-2.5 md:px-6 md:py-3 rounded-xl md:rounded-2xl font-black text-[9px] md:text-[10px] uppercase shadow-xl transition-all active:scale-95"
+                  >
+                    + Nova Tarefa
+                  </button>
+                </div>
+                <KanbanBoardV2
+                  tasks={tasksV2}
+                  userId={user.username || user.name}
+                  userPermissions={userPermissions}
+                  onTaskUpdate={async (taskId, updates) => {
+                    try {
+                      await TaskService.updateTask(taskId, updates);
+                    } catch (error) {
+                      console.error('Erro ao atualizar tarefa:', error);
+                    }
+                  }}
+                />
+              </div>
+            )}
+
+            {activeTab === 'organization' && (
+              <Organograma
+                companyId={user.companyId || ''}
+                userId={user.username || user.name}
+              />
+            )}
+
+            {activeTab === 'permissions' && (
+              <PermissionsDashboard
+                userId={user.username || user.name}
+                userPermissions={userPermissions}
+              />
             )}
 
             {activeTab === 'team' && (
@@ -454,6 +504,13 @@ const App: React.FC = () => {
         await setDoc(doc(db, "stores_config", user.storeId!), { schedules: s, fixedDemands: d, teamMembers: normalizedMembers });
         setIsTeamModalOpen(false);
       }} />}
+
+      {isAdminUserModalOpen && (
+        <AdminUserManagement
+          companyId={user.companyId || ''}
+          onClose={() => setIsAdminUserModalOpen(false)}
+        />
+      )}
 
       {completingTaskId && <CompleteTaskModal onClose={() => setCompletingTaskId(null)} onSubmit={async (desc, files) => {
         // Adiciona metadados de auditoria aos anexos

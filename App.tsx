@@ -81,7 +81,13 @@ const App: React.FC = () => {
   // Recupera apenas a sessão de login
   useEffect(() => {
     const savedAuth = localStorage.getItem('ecomm_session');
-    if (savedAuth) setUser(JSON.parse(savedAuth));
+    if (savedAuth) {
+      const parsed = JSON.parse(savedAuth) as User;
+      setUser(parsed);
+      if (parsed.role === Role.SUPPORT) setActiveTab('support');
+      else if (parsed.role === Role.DEV) setActiveTab('tasks');
+      else setActiveTab('tasks');
+    }
   }, []);
 
   // Inicializa Push Notifications (Web + PWA em smartphones)
@@ -127,6 +133,10 @@ const App: React.FC = () => {
   const handleLogin = (u: User) => {
     setUser(u);
     localStorage.setItem('ecomm_session', JSON.stringify(u));
+
+    if (u.role === Role.SUPPORT) setActiveTab('support');
+    else if (u.role === Role.DEV) setActiveTab('tasks');
+    else setActiveTab('tasks');
   };
 
   const handleLogout = () => {
@@ -174,6 +184,8 @@ const App: React.FC = () => {
 
   if (!user) return <Login onLogin={handleLogin} />;
 
+  const canCreateCompanies = user.role === Role.DEV || (user.role === Role.SUPPORT && user.canCreateCompany === true);
+
   return (
     <div className="min-h-screen bg-slate-950 pb-24 md:pb-6">
       <header className="bg-slate-900/80 border-b border-slate-800 p-4 sticky top-0 z-40 backdrop-blur-lg">
@@ -196,6 +208,7 @@ const App: React.FC = () => {
           <nav className="hidden lg:flex items-center gap-4">
             {user.role === Role.DEV && <button onClick={() => setActiveTab('tasks')} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all ${activeTab === 'tasks' ? 'bg-blue-600 text-white' : 'text-slate-500 hover:text-slate-300'}`}>📊 Empresas</button>}
             {user.role === Role.DEV && <button onClick={() => setActiveTab('dev-support')} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all ${activeTab === 'dev-support' ? 'bg-purple-600 text-white' : 'text-slate-500 hover:text-slate-300'}`}>🆘 Suporte</button>}
+            {user.role === Role.SUPPORT && canCreateCompanies && <button onClick={() => setActiveTab('tasks')} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all ${activeTab === 'tasks' ? 'bg-blue-600 text-white' : 'text-slate-500 hover:text-slate-300'}`}>📊 Empresas</button>}
             {user.role !== Role.DEV && user.role !== Role.SUPPORT && <button onClick={() => setActiveTab('tasks')} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all ${activeTab === 'tasks' ? 'bg-blue-600 text-white' : 'text-slate-500 hover:text-slate-300'}`}>Operação</button>}
             {user.role !== Role.DEV && user.role !== Role.SUPPORT && <button onClick={() => setActiveTab('team')} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all ${activeTab === 'team' ? 'bg-blue-600 text-white' : 'text-slate-500 hover:text-slate-300'}`}>Equipe</button>}
             {user.role !== Role.DEV && user.role !== Role.SUPPORT && <button onClick={() => setActiveTab('reports')} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all ${activeTab === 'reports' ? 'bg-blue-600 text-white' : 'text-slate-500 hover:text-slate-300'}`}>Relatórios</button>}
@@ -224,13 +237,26 @@ const App: React.FC = () => {
             companyId={user.companyId} 
           />
         ) : user.role === Role.SUPPORT ? (
-          <SupportDashboard 
-            userId={user.username || user.name}
-            userRole={user.role}
-            companyId={user.companyId}
-            storeId={user.storeId}
-            userName={user.name}
-          />
+          <>
+            {canCreateCompanies && (
+              <div className="flex md:hidden bg-slate-900 p-1 rounded-2xl border border-slate-800 overflow-x-auto gap-1">
+                <button onClick={() => setActiveTab('support')} className={`flex-1 py-3 px-4 whitespace-nowrap text-[10px] font-black uppercase rounded-xl transition-all ${activeTab === 'support' ? 'bg-blue-600 text-white' : 'text-slate-500'}`}>Meus Tickets</button>
+                <button onClick={() => setActiveTab('tasks')} className={`flex-1 py-3 px-4 whitespace-nowrap text-[10px] font-black uppercase rounded-xl transition-all ${activeTab === 'tasks' ? 'bg-blue-600 text-white' : 'text-slate-500'}`}>📊 Empresas</button>
+              </div>
+            )}
+
+            {activeTab === 'tasks' && canCreateCompanies ? (
+              <SuperAdminDashboard mode={Role.DEV} canCreateNew={true} canManageExisting={user.role === Role.DEV} />
+            ) : (
+              <SupportDashboard 
+                userId={user.username || user.name}
+                userRole={user.role}
+                companyId={user.companyId}
+                storeId={user.storeId}
+                userName={user.name}
+              />
+            )}
+          </>
         ) : (
           <>
             {activeTab === 'tasks' && <AdminStats tasks={tasks} teamMembers={teamMembers.map(m => m.name)} />}

@@ -150,7 +150,8 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
           onLogin({
             username: normalizedUser,
             role: Role.SUPPORT,
-            name: supportData.name
+            name: supportData.name,
+            canCreateCompany: supportData.canCreateCompany === true
           });
           return;
         }

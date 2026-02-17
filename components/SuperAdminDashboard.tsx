@@ -12,9 +12,16 @@ const VALID_USER = /^[a-z0-9_]{3,15}$/;
 interface SuperAdminDashboardProps {
   mode: Role.DEV | Role.COMPANY | Role.SUPPORT;
   companyId?: string;
+  canCreateNew?: boolean;
+  canManageExisting?: boolean;
 }
 
-const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ mode, companyId }) => {
+const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
+  mode,
+  companyId,
+  canCreateNew = true,
+  canManageExisting = true
+}) => {
   const [companies, setCompanies] = useState<Company[]>([]);
   const [stores, setStores] = useState<Store[]>([]);
   const [supportUsers, setSupportUsers] = useState<User[]>([]);
@@ -212,7 +219,9 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ mode, company
             value={searchTerm}
             onChange={e => setSearchTerm(e.target.value)}
           />
-          <button onClick={() => setIsAdding(true)} className="bg-blue-600 text-white px-6 py-3 rounded-2xl font-black text-[10px] uppercase shadow-lg">+ Novo</button>
+          {canCreateNew && (
+            <button onClick={() => setIsAdding(true)} className="bg-blue-600 text-white px-6 py-3 rounded-2xl font-black text-[10px] uppercase shadow-lg">+ Novo</button>
+          )}
         </div>
       </div>
 
@@ -239,23 +248,25 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ mode, company
           <div key={item.id} className="group bg-slate-900 border border-slate-800 rounded-3xl p-6 space-y-4 hover:border-blue-900/50 transition-all shadow-lg relative overflow-hidden">
             <div className="flex justify-between items-center">
               <span className="px-3 py-1 bg-blue-900/20 border border-blue-900/40 text-blue-400 rounded-lg text-[10px] font-black">{item.id || item.username}</span>
-              <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                {mode === Role.DEV && (
-                  <button
-                    onClick={() => setItemToToggleStatus(item)}
-                    className={`p-2 transition-colors ${item.isSuspended ? 'text-amber-400 hover:text-amber-300' : 'text-emerald-400 hover:text-emerald-300'}`}
-                    title={item.isSuspended ? 'Reativar corporativa' : 'Inativar corporativa'}
-                  >
-                    {item.isSuspended ? (
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" /></svg>
-                    ) : (
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 9v6m4-6v6m-9 6h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
-                    )}
-                  </button>
-                )}
-                <button onClick={() => startEdit(item)} className="p-2 text-slate-500 hover:text-blue-400 transition-colors"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg></button>
-                <button onClick={() => setItemToDelete(item.id || item.username)} className="p-2 text-slate-500 hover:text-red-500 transition-colors"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button>
-              </div>
+              {canManageExisting && (
+                <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                  {mode === Role.DEV && (
+                    <button
+                      onClick={() => setItemToToggleStatus(item)}
+                      className={`p-2 transition-colors ${item.isSuspended ? 'text-amber-400 hover:text-amber-300' : 'text-emerald-400 hover:text-emerald-300'}`}
+                      title={item.isSuspended ? 'Reativar corporativa' : 'Inativar corporativa'}
+                    >
+                      {item.isSuspended ? (
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" /></svg>
+                      ) : (
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 9v6m4-6v6m-9 6h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
+                      )}
+                    </button>
+                  )}
+                  <button onClick={() => startEdit(item)} className="p-2 text-slate-500 hover:text-blue-400 transition-colors"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg></button>
+                  <button onClick={() => setItemToDelete(item.id || item.username)} className="p-2 text-slate-500 hover:text-red-500 transition-colors"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button>
+                </div>
+              )}
             </div>
             <h3 className="text-lg font-bold text-white uppercase">{item.name || item.adminName}</h3>
             <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 flex justify-between">

@@ -19,6 +19,19 @@ import {
 
 export class AuthorizationService {
   /**
+   * Retorna todas as permissões do usuário
+   */
+  static async getUserPermissions(userId: string): Promise<Permission[]> {
+    const user = await this.getUser(userId);
+    if (!user || user.status !== UserStatus.ACTIVE) return [];
+
+    const role = await this.getRole(user.roleId);
+    if (!role) return [];
+
+    return role.permissions || [];
+  }
+
+  /**
    * Verifica se usuário tem permissão específica
    */
   static async hasPermission(

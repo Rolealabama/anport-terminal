@@ -131,6 +131,32 @@ export class RealtimeService {
   }
 
   /**
+   * Escuta todas as tarefas de uma empresa em tempo real
+   */
+  static subscribeToCompanyTasks(
+    companyId: string,
+    callback: TaskCallback
+  ): Unsubscribe {
+    const q = query(
+      collection(db, 'tasks_v2'),
+      where('companyId', '==', companyId)
+    );
+
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        const tasks = this.snapshotToTasks(snapshot);
+        callback(tasks);
+      },
+      (error) => {
+        console.error('Erro no listener de tarefas da empresa:', error);
+      }
+    );
+
+    return unsubscribe;
+  }
+
+  /**
    * Escuta notificações em tempo real
    */
   static subscribeToNotifications(

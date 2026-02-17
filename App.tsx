@@ -1,12 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { User, Role, Task, Status, TeamMember, WorkSchedule, FixedDemand, Feedback, PhotoAuditLog } from './types.ts';
+import { User as UserV2, Role as RoleV2, Permission, Task as TaskV2, TaskStatus, TaskFlowType } from './types-v2.ts';
 import { db, isFirebaseConfigured } from './firebase.ts';
 import { collection, query, where, onSnapshot, doc, updateDoc, addDoc, deleteDoc, setDoc } from 'firebase/firestore';
+import { AuthorizationService } from './services/AuthorizationService.ts';
+import { HierarchyService } from './services/HierarchyService.ts';
+import { TaskService } from './services/TaskService.ts';
+import { RealtimeService } from './services/RealtimeService.ts';
 import Login from './components/Login.tsx';
 import KanbanBoard from './components/KanbanBoard.tsx';
 import AdminStats from './components/AdminStats.tsx';
 import TeamBoard from './components/TeamBoard.tsx';
 import NewTaskModal from './components/NewTaskModal.tsx';
+import NewTaskModalV2 from './components/NewTaskModalV2.tsx';
 import SuperAdminDashboard from './components/SuperAdminDashboard.tsx';
 import TeamSettingsModal from './components/TeamSettingsModal.tsx';
 import CompleteTaskModal from './components/CompleteTaskModal.tsx';
@@ -19,6 +25,7 @@ import DevSupportManagement from './components/DevSupportManagement.tsx';
 import { initializePushNotifications } from './services/PushNotificationService.ts';
 
 const App: React.FC = () => {
+  // V1 State (mantém compatibilidade)
   const [user, setUser] = useState<User | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
@@ -26,8 +33,15 @@ const App: React.FC = () => {
   const [fixedDemands, setFixedDemands] = useState<FixedDemand[]>([]);
   const [feedbacks, setFeedbacks] = useState<Feedback[]>([]);
   
+  // V2 State (novo)
+  const [userPermissions, setUserPermissions] = useState<Permission[]>([]);
+  const [userHierarchy, setUserHierarchy] = useState<string[]>([]);
+  const [tasksV2, setTasksV2] = useState<TaskV2[]>([]);
+  const [isAuthorizationLoading, setIsAuthorizationLoading] = useState(false);
+  
   const [activeTab, setActiveTab] = useState<'tasks' | 'team' | 'feedback' | 'reports' | 'support' | 'mytickets' | 'dev-support'>('tasks');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isModalV2Open, setIsModalV2Open] = useState(false);
   const [isTeamModalOpen, setIsTeamModalOpen] = useState(false);
   const [completingTaskId, setCompletingTaskId] = useState<string | null>(null);
 
@@ -90,6 +104,44 @@ const App: React.FC = () => {
     }
   }, []);
 
+  // Carrega permissões V2 quando usuário faz login
+  useEffect(() => {
+    if (!user) return;
+    
+    const loadPermissions = async () => {
+      try {
+        setIsAuthorizationLoading(true);
+        // Busca todas as permissões do usuário
+        const perms = await AuthorizationService.getUserPermissions(user.username || user.name);
+        setUserPermissions(perms);
+        
+        // Busca hierarquia do usuário
+        const hierarchy = await HierarchyService.calculateHierarchyPath(user.username || user.name);
+        setUserHierarchy(hierarchy);
+      } catch (error) {
+        console.error('Erro ao carregar permissões:', error);
+      } finally {
+        setIsAuthorizationLoading(false);
+      }
+    };
+
+    loadPermissions();
+  }, [user]);
+
+  // Subscribe a tarefas V2 via RealtimeService
+  useEffect(() => {
+    if (!user || !user.companyId) return;
+    
+    const unsubscribe = RealtimeService.subscribeToCompanyTasks(
+      user.companyId,
+      (newTasks) => {
+        setTasksV2(newTasks);
+      }
+    );
+
+    return () => unsubscribe?.();
+  }, [user?.companyId]);
+
   // Inicializa Push Notifications (Web + PWA em smartphones)
   useEffect(() => {
     if (!user) return;
@@ -110,6 +162,29 @@ const App: React.FC = () => {
       });
     }
     window.location.reload();
+  };
+
+  // Helper: Verifica se usuário tem uma permissão específica
+  const hasPermission = (permission: Permission): boolean => {
+    return userPermissions.includes(permission);
+  };
+
+  // Helper: Autoriza criação de tarefa com fluxo específico
+  const authorizeTaskCreation = async (flowType: TaskFlowType, targetUserId?: string, targetDepartmentId?: string) => {
+    if (!user) return { allowed: false, reason: 'Usuário não autenticado' };
+    
+    try {
+      const result = await AuthorizationService.authorizeTaskCreation(
+        user.username || user.name,
+        flowType,
+        targetUserId,
+        targetDepartmentId
+      );
+      return result;
+    } catch (error) {
+      console.error('Erro ao autorizar criação de tarefa:', error);
+      return { allowed: false, reason: 'Erro ao verificar autorização' };
+    }
   };
 
   if (!isFirebaseConfigured) {
@@ -274,7 +349,26 @@ const App: React.FC = () => {
               <div className="space-y-6">
                 <div className="flex justify-between items-center bg-slate-900/50 p-4 md:p-6 rounded-3xl border border-slate-800">
                   <h2 className="text-lg md:text-xl font-black uppercase tracking-tighter">Fluxo de Trabalho</h2>
-                  {user.role === Role.ADMIN && <button onClick={() => setIsModalOpen(true)} className="bg-blue-600 text-white px-5 py-2.5 md:px-6 md:py-3 rounded-xl md:rounded-2xl font-black text-[9px] md:text-[10px] uppercase shadow-xl transition-all active:scale-95">Nova Tarefa</button>}
+                  <div className="flex gap-3">
+                    {/* V2 Modal (se tem permissões) */}
+                    {userPermissions.length > 0 && (
+                      <button 
+                        onClick={() => setIsModalV2Open(true)} 
+                        className="bg-purple-600 hover:bg-purple-700 text-white px-5 py-2.5 md:px-6 md:py-3 rounded-xl md:rounded-2xl font-black text-[9px] md:text-[10px] uppercase shadow-xl transition-all active:scale-95"
+                      >
+                        ✨ Nova Tarefa V2
+                      </button>
+                    )}
+                    {/* V1 Modal (compatibilidade) */}
+                    {user.role === Role.ADMIN && (
+                      <button 
+                        onClick={() => setIsModalOpen(true)} 
+                        className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 md:px-6 md:py-3 rounded-xl md:rounded-2xl font-black text-[9px] md:text-[10px] uppercase shadow-xl transition-all active:scale-95"
+                      >
+                        Nova Tarefa
+                      </button>
+                    )}
+                  </div>
                 </div>
                 <KanbanBoard 
                   tasks={tasks} 
@@ -327,6 +421,33 @@ const App: React.FC = () => {
         await addDoc(collection(db, "tasks"), { ...t, status: Status.TODO, createdAt: Date.now(), storeId: user.storeId! });
         setIsModalOpen(false);
       }} />}
+
+      {isModalV2Open && (
+        <NewTaskModalV2
+          userId={user.username || user.name}
+          companyId={user.companyId || ''}
+          userPermissions={userPermissions}
+          onClose={() => setIsModalV2Open(false)}
+          onSubmit={async (task) => {
+            try {
+              // TaskService.createTask espera (creatorId, request)
+              await TaskService.createTask(user.username || user.name, {
+                flowType: task.flowType,
+                assignedToUserId: task.assignedToUserId,
+                assignedToDepartmentId: task.assignedToDepartmentId,
+                title: task.title,
+                description: task.description,
+                priority: task.priority,
+                dueDate: task.dueDate
+              });
+              setIsModalV2Open(false);
+            } catch (error) {
+              console.error('Erro ao criar tarefa V2:', error);
+            }
+          }}
+          onError={(error) => console.error('Erro no modal V2:', error)}
+        />
+      )}
       
       {isTeamModalOpen && <TeamSettingsModal teamMembers={teamMembers} schedules={schedules} fixedDemands={fixedDemands} storeId={user.storeId!} onClose={() => setIsTeamModalOpen(false)} onSave={async (s, d, m) => {
         const normalizedMembers = m.map(member => ({ ...member, storeId: member.storeId || user.storeId! }));

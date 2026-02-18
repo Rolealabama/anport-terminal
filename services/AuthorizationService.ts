@@ -461,7 +461,7 @@ export class AuthorizationService {
       if (!userDoc.exists()) return null;
       return { id: userDoc.id, ...userDoc.data() } as User;
     } catch (error) {
-      console.error('Erro ao buscar usuário:', error);
+      if (import.meta.env.MODE !== 'test') console.error('Erro ao buscar usuário:', error);
       return null;
     }
   }

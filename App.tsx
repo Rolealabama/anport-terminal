@@ -143,19 +143,36 @@ const App: React.FC = () => {
   // Carrega permissões V2 quando usuário faz login
   useEffect(() => {
     if (!user) return;
+    const isTestEnv = import.meta.env.MODE === 'test';
     
     const loadPermissions = async () => {
       try {
         setIsAuthorizationLoading(true);
         // Busca todas as permissões do usuário
         const perms = await AuthorizationService.getUserPermissions(user.username || user.name);
-        setUserPermissions(perms);
+
+        const companyBaselinePermissions: Permission[] = [
+          Permission.TASK_CREATE_DOWN,
+          Permission.TASK_CREATE_UP,
+          Permission.TASK_CREATE_SAME,
+          Permission.TASK_CREATE_TO_DEPT,
+          Permission.BOARD_VIEW_OWN,
+          Permission.BOARD_VIEW_DOWN,
+          Permission.BOARD_MOVE_OWN,
+          Permission.BOARD_MOVE_DEPT
+        ];
+
+        const resolvedPermissions = user.role === Role.COMPANY
+          ? Array.from(new Set<Permission>([...perms, ...companyBaselinePermissions]))
+          : perms;
+
+        setUserPermissions(resolvedPermissions);
         
         // Busca hierarquia do usuário
         const hierarchy = await HierarchyService.calculateHierarchyPath(user.username || user.name);
         setUserHierarchy(hierarchy);
       } catch (error) {
-        console.error('Erro ao carregar permissões:', error);
+        if (!isTestEnv) console.error('Erro ao carregar permissões:', error);
       } finally {
         setIsAuthorizationLoading(false);
       }
@@ -344,6 +361,8 @@ const App: React.FC = () => {
 
   const teamTabLabel = user.role === Role.COMPANY ? 'Hierarquia' : 'Equipe';
   const canSeeV2 = userPermissions.length > 0;
+  const showOperationTab = user.role === Role.COMPANY ? true : canSeeV2;
+  const operationTabLabel = user.role === Role.COMPANY ? 'Operação' : '✨ V2.0';
   const canSeeTeamTab = user.role !== Role.USER; // colaborador não gerencia equipe
   const canSeeOrgTab = canDelegate; // só líderes
   const canSeeReportsTab = canDelegate; // só líderes
@@ -355,7 +374,7 @@ const App: React.FC = () => {
     if (user.role === Role.SUPPORT) return canCreateCompanies ? ['support', 'tasks'] : ['support'];
 
     const tabs: Array<typeof activeTab> = ['tasks'];
-    if (canSeeV2) tabs.push('kanban-v2');
+    if (showOperationTab) tabs.push('kanban-v2');
     if (canSeeTeamTab) tabs.push('team');
     if (canSeeOrgTab) tabs.push('organization');
     if (canSeeReportsTab) tabs.push('reports');
@@ -395,7 +414,7 @@ const App: React.FC = () => {
             </div>
           </div>
           
-          <nav className="hidden lg:flex items-center gap-4">
+          <nav className="hidden lg:flex items-center gap-2 min-w-0 flex-1 overflow-x-auto custom-scrollbar px-2">
             {user.role === Role.DEV && <button onClick={() => setActiveTab('tasks')} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all ${effectiveTab === 'tasks' ? 'bg-blue-600 text-white' : 'text-slate-500 hover:text-slate-300'}`}>📊 Empresas</button>}
             {user.role === Role.DEV && <button onClick={() => setActiveTab('dev-support')} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all ${effectiveTab === 'dev-support' ? 'bg-purple-600 text-white' : 'text-slate-500 hover:text-slate-300'}`}>🆘 Suporte</button>}
             {user.role === Role.SUPPORT && canCreateCompanies && <button onClick={() => setActiveTab('tasks')} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all ${effectiveTab === 'tasks' ? 'bg-blue-600 text-white' : 'text-slate-500 hover:text-slate-300'}`}>📊 Empresas</button>}
@@ -404,7 +423,7 @@ const App: React.FC = () => {
             {user.role !== Role.DEV && user.role !== Role.SUPPORT && (
               <>
                 <button onClick={() => setActiveTab('tasks')} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all ${effectiveTab === 'tasks' ? 'bg-blue-600 text-white' : 'text-slate-500 hover:text-slate-300'}`}>{primaryTabLabel}</button>
-                {canSeeV2 && <button onClick={() => setActiveTab('kanban-v2')} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all ${effectiveTab === 'kanban-v2' ? 'bg-purple-600 text-white' : 'text-slate-500 hover:text-slate-300'}`}>✨ V2.0</button>}
+                {showOperationTab && <button onClick={() => setActiveTab('kanban-v2')} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all ${effectiveTab === 'kanban-v2' ? 'bg-purple-600 text-white' : 'text-slate-500 hover:text-slate-300'}`}>{operationTabLabel}</button>}
                 {canSeeTeamTab && <button onClick={() => setActiveTab('team')} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all ${effectiveTab === 'team' ? 'bg-blue-600 text-white' : 'text-slate-500 hover:text-slate-300'}`}>{teamTabLabel}</button>}
                 {canSeeOrgTab && <button onClick={() => setActiveTab('organization')} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all ${effectiveTab === 'organization' ? 'bg-blue-600 text-white' : 'text-slate-500 hover:text-slate-300'}`}>🏢 Org.</button>}
                 {canSeeReportsTab && <button onClick={() => setActiveTab('reports')} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all ${effectiveTab === 'reports' ? 'bg-blue-600 text-white' : 'text-slate-500 hover:text-slate-300'}`}>Relatórios</button>}
@@ -458,13 +477,15 @@ const App: React.FC = () => {
                     <SuperAdminDashboard mode={Role.COMPANY} companyId={user.companyId} currentUsername={user.username} />
                   </div>
                 )}
-                <AdminStats tasks={visibleTasks} teamMembers={statsUsernames} memberDirectory={memberDirectory} />
+                {user.role !== Role.COMPANY && (
+                  <AdminStats tasks={visibleTasks} teamMembers={statsUsernames} memberDirectory={memberDirectory} />
+                )}
               </>
             )}
             
             <div className="flex md:hidden bg-slate-900 p-1 rounded-2xl border border-slate-800 overflow-x-auto gap-1">
               <button onClick={() => setActiveTab('tasks')} className={`flex-1 py-3 px-4 whitespace-nowrap text-[10px] font-black uppercase rounded-xl transition-all ${effectiveTab === 'tasks' ? 'bg-blue-600 text-white' : 'text-slate-500'}`}>{primaryTabLabel}</button>
-              {canSeeV2 && <button onClick={() => setActiveTab('kanban-v2')} className={`flex-1 py-3 px-4 whitespace-nowrap text-[10px] font-black uppercase rounded-xl transition-all ${effectiveTab === 'kanban-v2' ? 'bg-purple-600 text-white' : 'text-slate-500'}`}>✨ V2</button>}
+              {showOperationTab && <button onClick={() => setActiveTab('kanban-v2')} className={`flex-1 py-3 px-4 whitespace-nowrap text-[10px] font-black uppercase rounded-xl transition-all ${effectiveTab === 'kanban-v2' ? 'bg-purple-600 text-white' : 'text-slate-500'}`}>{operationTabLabel}</button>}
               {canSeeTeamTab && <button onClick={() => setActiveTab('team')} className={`flex-1 py-3 px-4 whitespace-nowrap text-[10px] font-black uppercase rounded-xl transition-all ${effectiveTab === 'team' ? 'bg-blue-600 text-white' : 'text-slate-500'}`}>{teamTabLabel}</button>}
               {canSeeOrgTab && <button onClick={() => setActiveTab('organization')} className={`flex-1 py-3 px-4 whitespace-nowrap text-[10px] font-black uppercase rounded-xl transition-all ${effectiveTab === 'organization' ? 'bg-blue-600 text-white' : 'text-slate-500'}`}>Org.</button>}
               {canSeeReportsTab && <button onClick={() => setActiveTab('reports')} className={`flex-1 py-3 px-4 whitespace-nowrap text-[10px] font-black uppercase rounded-xl transition-all ${effectiveTab === 'reports' ? 'bg-blue-600 text-white' : 'text-slate-500'}`}>Dados</button>}
@@ -472,11 +493,11 @@ const App: React.FC = () => {
               {canSeeSupportTab && <button onClick={() => setActiveTab('mytickets')} className={`flex-1 py-3 px-4 whitespace-nowrap text-[10px] font-black uppercase rounded-xl transition-all ${effectiveTab === 'mytickets' ? 'bg-green-600 text-white' : 'text-slate-500'}`}>📤 Suporte</button>}
             </div>
 
-            {effectiveTab === 'tasks' && (
+            {effectiveTab === 'tasks' && user.role !== Role.COMPANY && (
               <div className="space-y-6">
-                <div className="flex justify-between items-center bg-slate-900/50 p-4 md:p-6 rounded-3xl border border-slate-800">
-                  <h2 className="text-lg md:text-xl font-black uppercase tracking-tighter">Fluxo de Trabalho</h2>
-                  <div className="flex gap-3">
+                <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-3 bg-slate-900/50 p-4 md:p-6 rounded-3xl border border-slate-800">
+                  <h2 className="text-lg md:text-xl font-black uppercase tracking-tighter min-w-0">Fluxo de Trabalho</h2>
+                  <div className="flex flex-wrap gap-3 justify-end">
                     {/* V2 Modal (se tem permissões) */}
                     {userPermissions.length > 0 && (
                       <button 
@@ -512,29 +533,62 @@ const App: React.FC = () => {
             )}
 
             {effectiveTab === 'kanban-v2' && (
-              <div className="space-y-6">
-                <div className="flex justify-between items-center bg-slate-900/50 p-4 md:p-6 rounded-3xl border border-slate-800">
-                  <h2 className="text-lg md:text-xl font-black uppercase tracking-tighter">Fluxo V2.0</h2>
-                  <button 
-                    onClick={() => setIsModalV2Open(true)} 
-                    className="bg-purple-600 hover:bg-purple-700 text-white px-5 py-2.5 md:px-6 md:py-3 rounded-xl md:rounded-2xl font-black text-[9px] md:text-[10px] uppercase shadow-xl transition-all active:scale-95"
-                  >
-                    + Nova Tarefa
-                  </button>
-                </div>
-                <KanbanBoardV2
-                  tasks={tasksV2}
-                  userId={user.username || user.name}
-                  userPermissions={userPermissions}
-                  onTaskUpdate={async (taskId, updates) => {
-                    try {
-                      await TaskService.updateTask(taskId, updates);
-                    } catch (error) {
-                      console.error('Erro ao atualizar tarefa:', error);
-                    }
-                  }}
-                />
-              </div>
+              <>
+                {user.role === Role.COMPANY ? (
+                  <div className="space-y-6">
+                    <AdminStats tasks={visibleTasks} teamMembers={statsUsernames} memberDirectory={memberDirectory} />
+                    <div className="space-y-6">
+                      <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-3 bg-slate-900/50 p-4 md:p-6 rounded-3xl border border-slate-800">
+                        <h2 className="text-lg md:text-xl font-black uppercase tracking-tighter min-w-0">Operação V2.0</h2>
+                        {userPermissions.length > 0 && (
+                          <button 
+                            onClick={() => setIsModalV2Open(true)} 
+                            className="bg-purple-600 hover:bg-purple-700 text-white px-5 py-2.5 md:px-6 md:py-3 rounded-xl md:rounded-2xl font-black text-[9px] md:text-[10px] uppercase shadow-xl transition-all active:scale-95"
+                          >
+                            + Nova Tarefa
+                          </button>
+                        )}
+                      </div>
+                      <KanbanBoardV2
+                        tasks={tasksV2}
+                        userId={user.username || user.name}
+                        userPermissions={userPermissions}
+                        onTaskUpdate={async (taskId, updates) => {
+                          try {
+                            await TaskService.updateTask(taskId, updates);
+                          } catch (error) {
+                            console.error('Erro ao atualizar tarefa:', error);
+                          }
+                        }}
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-6">
+                    <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-3 bg-slate-900/50 p-4 md:p-6 rounded-3xl border border-slate-800">
+                      <h2 className="text-lg md:text-xl font-black uppercase tracking-tighter min-w-0">Fluxo V2.0</h2>
+                      <button 
+                        onClick={() => setIsModalV2Open(true)} 
+                        className="bg-purple-600 hover:bg-purple-700 text-white px-5 py-2.5 md:px-6 md:py-3 rounded-xl md:rounded-2xl font-black text-[9px] md:text-[10px] uppercase shadow-xl transition-all active:scale-95"
+                      >
+                        + Nova Tarefa
+                      </button>
+                    </div>
+                    <KanbanBoardV2
+                      tasks={tasksV2}
+                      userId={user.username || user.name}
+                      userPermissions={userPermissions}
+                      onTaskUpdate={async (taskId, updates) => {
+                        try {
+                          await TaskService.updateTask(taskId, updates);
+                        } catch (error) {
+                          console.error('Erro ao atualizar tarefa:', error);
+                        }
+                      }}
+                    />
+                  </div>
+                )}
+              </>
             )}
 
             {effectiveTab === 'organization' && (

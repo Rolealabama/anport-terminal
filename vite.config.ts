@@ -56,12 +56,12 @@ export default defineConfig(({ mode }) => {
       },
       resolve: {
         alias: {
-          '@': path.resolve(__dirname, 'src'),
-          '@/components': path.resolve(__dirname, 'src/components'),
-          '@/services': path.resolve(__dirname, 'src/services'),
-          '@/utils': path.resolve(__dirname, 'src/utils'),
-          '@/types': path.resolve(__dirname, 'src/types'),
-          '@/config': path.resolve(__dirname, 'src/config'),
+          '@': path.resolve(__dirname, '.'),
+          '@/components': path.resolve(__dirname, 'components'),
+          '@/services': path.resolve(__dirname, 'services'),
+          '@/utils': path.resolve(__dirname, '.'),
+          '@/types': path.resolve(__dirname, '.'),
+          '@/config': path.resolve(__dirname, 'config'),
         }
       },
       build: {

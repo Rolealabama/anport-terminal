@@ -243,7 +243,7 @@ describe('App', () => {
     fireEvent.click(screen.getByText('save team'));
     expect(vi.mocked(setDoc)).toHaveBeenCalled();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Ouvidoria' }));
+    fireEvent.click(screen.getAllByRole('button', { name: 'Avisos' })[0]);
     fireEvent.click(screen.getByText('send feedback'));
     fireEvent.click(screen.getByText('reply feedback'));
     expect(vi.mocked(addDoc)).toHaveBeenCalled();

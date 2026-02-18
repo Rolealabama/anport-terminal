@@ -332,6 +332,40 @@ const App: React.FC = () => {
 
   const canCreateCompanies = user.role === Role.DEV || (user.role === Role.SUPPORT && user.canCreateCompany === true);
 
+  // -------------------- Navegação por Cargo --------------------
+  const primaryTabLabel =
+    user.role === Role.COMPANY
+      ? 'Empresa'
+      : user.role === Role.MANAGER || user.role === Role.ADMIN
+        ? 'Gestão'
+        : user.role === Role.SUPERVISOR
+          ? 'Supervisão'
+          : 'Execução';
+
+  const teamTabLabel = user.role === Role.COMPANY ? 'Hierarquia' : 'Equipe';
+  const canSeeV2 = userPermissions.length > 0;
+  const canSeeTeamTab = user.role !== Role.USER; // colaborador não gerencia equipe
+  const canSeeOrgTab = canDelegate; // só líderes
+  const canSeeReportsTab = canDelegate; // só líderes
+  const canSeeFeedbackTab = user.role !== Role.DEV && user.role !== Role.SUPPORT;
+  const canSeeSupportTab = user.role !== Role.DEV && user.role !== Role.SUPPORT;
+
+  const allowedTabs: Array<typeof activeTab> = (() => {
+    if (user.role === Role.DEV) return ['tasks', 'dev-support'];
+    if (user.role === Role.SUPPORT) return canCreateCompanies ? ['support', 'tasks'] : ['support'];
+
+    const tabs: Array<typeof activeTab> = ['tasks'];
+    if (canSeeV2) tabs.push('kanban-v2');
+    if (canSeeTeamTab) tabs.push('team');
+    if (canSeeOrgTab) tabs.push('organization');
+    if (canSeeReportsTab) tabs.push('reports');
+    if (canSeeFeedbackTab) tabs.push('feedback');
+    if (canSeeSupportTab) tabs.push('mytickets');
+    return tabs;
+  })();
+
+  const effectiveTab: typeof activeTab = allowedTabs.includes(activeTab) ? activeTab : allowedTabs[0];
+
   return (
     <div className="min-h-screen bg-slate-950 pb-24 md:pb-6">
       <header className="bg-slate-900/80 border-b border-slate-800 p-4 sticky top-0 z-40 backdrop-blur-lg">
@@ -362,18 +396,22 @@ const App: React.FC = () => {
           </div>
           
           <nav className="hidden lg:flex items-center gap-4">
-            {user.role === Role.DEV && <button onClick={() => setActiveTab('tasks')} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all ${activeTab === 'tasks' ? 'bg-blue-600 text-white' : 'text-slate-500 hover:text-slate-300'}`}>📊 Empresas</button>}
-            {user.role === Role.DEV && <button onClick={() => setActiveTab('dev-support')} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all ${activeTab === 'dev-support' ? 'bg-purple-600 text-white' : 'text-slate-500 hover:text-slate-300'}`}>🆘 Suporte</button>}
-            {user.role === Role.SUPPORT && canCreateCompanies && <button onClick={() => setActiveTab('tasks')} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all ${activeTab === 'tasks' ? 'bg-blue-600 text-white' : 'text-slate-500 hover:text-slate-300'}`}>📊 Empresas</button>}
-            {user.role !== Role.DEV && user.role !== Role.SUPPORT && <button onClick={() => setActiveTab('tasks')} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all ${activeTab === 'tasks' ? 'bg-blue-600 text-white' : 'text-slate-500 hover:text-slate-300'}`}>Operação</button>}
-            {user.role !== Role.DEV && user.role !== Role.SUPPORT && <button onClick={() => setActiveTab('kanban-v2')} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all ${activeTab === 'kanban-v2' ? 'bg-purple-600 text-white' : 'text-slate-500 hover:text-slate-300'}`}>✨ V2.0</button>}
-            {user.role !== Role.DEV && user.role !== Role.SUPPORT && <button onClick={() => setActiveTab('team')} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all ${activeTab === 'team' ? 'bg-blue-600 text-white' : 'text-slate-500 hover:text-slate-300'}`}>Equipe</button>}
-            {user.role !== Role.DEV && user.role !== Role.SUPPORT && <button onClick={() => setActiveTab('organization')} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all ${activeTab === 'organization' ? 'bg-blue-600 text-white' : 'text-slate-500 hover:text-slate-300'}`}>🏢 Org.</button>}
-            {user.role === Role.ADMIN && <button onClick={() => setIsAdminUserModalOpen(true)} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all text-slate-500 hover:text-slate-300`}>👥 Usuários</button>}
-            {user.role !== Role.DEV && user.role !== Role.SUPPORT && <button onClick={() => setActiveTab('reports')} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all ${activeTab === 'reports' ? 'bg-blue-600 text-white' : 'text-slate-500 hover:text-slate-300'}`}>Relatórios</button>}
-            {user.role !== Role.DEV && user.role !== Role.SUPPORT && <button onClick={() => setActiveTab('feedback')} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all ${activeTab === 'feedback' ? 'bg-blue-600 text-white' : 'text-slate-500 hover:text-slate-300'}`}>Ouvidoria</button>}
-            {user.role === Role.SUPPORT && <button onClick={() => setActiveTab('support')} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all ${activeTab === 'support' ? 'bg-blue-600 text-white' : 'text-slate-500 hover:text-slate-300'}`}>Meus Tickets</button>}
-            {user.role !== Role.DEV && user.role !== Role.COMPANY && <button onClick={() => setActiveTab('mytickets')} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all ${activeTab === 'mytickets' ? 'bg-green-600 text-white' : 'text-slate-500 hover:text-slate-300'}`}>📤 Suporte</button>}
+            {user.role === Role.DEV && <button onClick={() => setActiveTab('tasks')} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all ${effectiveTab === 'tasks' ? 'bg-blue-600 text-white' : 'text-slate-500 hover:text-slate-300'}`}>📊 Empresas</button>}
+            {user.role === Role.DEV && <button onClick={() => setActiveTab('dev-support')} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all ${effectiveTab === 'dev-support' ? 'bg-purple-600 text-white' : 'text-slate-500 hover:text-slate-300'}`}>🆘 Suporte</button>}
+            {user.role === Role.SUPPORT && canCreateCompanies && <button onClick={() => setActiveTab('tasks')} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all ${effectiveTab === 'tasks' ? 'bg-blue-600 text-white' : 'text-slate-500 hover:text-slate-300'}`}>📊 Empresas</button>}
+            {user.role === Role.SUPPORT && <button onClick={() => setActiveTab('support')} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all ${effectiveTab === 'support' ? 'bg-blue-600 text-white' : 'text-slate-500 hover:text-slate-300'}`}>Meus Tickets</button>}
+
+            {user.role !== Role.DEV && user.role !== Role.SUPPORT && (
+              <>
+                <button onClick={() => setActiveTab('tasks')} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all ${effectiveTab === 'tasks' ? 'bg-blue-600 text-white' : 'text-slate-500 hover:text-slate-300'}`}>{primaryTabLabel}</button>
+                {canSeeV2 && <button onClick={() => setActiveTab('kanban-v2')} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all ${effectiveTab === 'kanban-v2' ? 'bg-purple-600 text-white' : 'text-slate-500 hover:text-slate-300'}`}>✨ V2.0</button>}
+                {canSeeTeamTab && <button onClick={() => setActiveTab('team')} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all ${effectiveTab === 'team' ? 'bg-blue-600 text-white' : 'text-slate-500 hover:text-slate-300'}`}>{teamTabLabel}</button>}
+                {canSeeOrgTab && <button onClick={() => setActiveTab('organization')} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all ${effectiveTab === 'organization' ? 'bg-blue-600 text-white' : 'text-slate-500 hover:text-slate-300'}`}>🏢 Org.</button>}
+                {canSeeReportsTab && <button onClick={() => setActiveTab('reports')} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all ${effectiveTab === 'reports' ? 'bg-blue-600 text-white' : 'text-slate-500 hover:text-slate-300'}`}>Relatórios</button>}
+                {canSeeFeedbackTab && <button onClick={() => setActiveTab('feedback')} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all ${effectiveTab === 'feedback' ? 'bg-blue-600 text-white' : 'text-slate-500 hover:text-slate-300'}`}>Avisos</button>}
+                {canSeeSupportTab && <button onClick={() => setActiveTab('mytickets')} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all ${effectiveTab === 'mytickets' ? 'bg-green-600 text-white' : 'text-slate-500 hover:text-slate-300'}`}>📤 Suporte</button>}
+              </>
+            )}
           </nav>
 
           <button onClick={handleLogout} className="px-3 py-1.5 md:px-4 md:py-2 text-[9px] md:text-[10px] font-black text-slate-500 hover:text-red-500 uppercase border border-slate-800 rounded-lg md:rounded-xl transition-all">Sair</button>
@@ -384,22 +422,22 @@ const App: React.FC = () => {
         {user.role === Role.DEV ? (
           <>
             <div className="flex md:hidden bg-slate-900 p-1 rounded-2xl border border-slate-800 overflow-x-auto gap-1">
-              <button onClick={() => setActiveTab('tasks')} className={`flex-1 py-3 px-4 whitespace-nowrap text-[10px] font-black uppercase rounded-xl transition-all ${activeTab === 'tasks' ? 'bg-blue-600 text-white' : 'text-slate-500'}`}>📊 Empresas</button>
-              <button onClick={() => setActiveTab('dev-support')} className={`flex-1 py-3 px-4 whitespace-nowrap text-[10px] font-black uppercase rounded-xl transition-all ${activeTab === 'dev-support' ? 'bg-purple-600 text-white' : 'text-slate-500'}`}>🆘 Suporte</button>
+              <button onClick={() => setActiveTab('tasks')} className={`flex-1 py-3 px-4 whitespace-nowrap text-[10px] font-black uppercase rounded-xl transition-all ${effectiveTab === 'tasks' ? 'bg-blue-600 text-white' : 'text-slate-500'}`}>📊 Empresas</button>
+              <button onClick={() => setActiveTab('dev-support')} className={`flex-1 py-3 px-4 whitespace-nowrap text-[10px] font-black uppercase rounded-xl transition-all ${effectiveTab === 'dev-support' ? 'bg-purple-600 text-white' : 'text-slate-500'}`}>🆘 Suporte</button>
             </div>
-            {activeTab === 'tasks' && <SuperAdminDashboard mode={user.role} companyId={user.companyId} />}
-            {activeTab === 'dev-support' && <DevSupportManagement devId={user.username || user.name} />}
+            {effectiveTab === 'tasks' && <SuperAdminDashboard mode={user.role} companyId={user.companyId} />}
+            {effectiveTab === 'dev-support' && <DevSupportManagement devId={user.username || user.name} />}
           </>
         ) : user.role === Role.SUPPORT ? (
           <>
             {canCreateCompanies && (
               <div className="flex md:hidden bg-slate-900 p-1 rounded-2xl border border-slate-800 overflow-x-auto gap-1">
-                <button onClick={() => setActiveTab('support')} className={`flex-1 py-3 px-4 whitespace-nowrap text-[10px] font-black uppercase rounded-xl transition-all ${activeTab === 'support' ? 'bg-blue-600 text-white' : 'text-slate-500'}`}>Meus Tickets</button>
-                <button onClick={() => setActiveTab('tasks')} className={`flex-1 py-3 px-4 whitespace-nowrap text-[10px] font-black uppercase rounded-xl transition-all ${activeTab === 'tasks' ? 'bg-blue-600 text-white' : 'text-slate-500'}`}>📊 Empresas</button>
+                <button onClick={() => setActiveTab('support')} className={`flex-1 py-3 px-4 whitespace-nowrap text-[10px] font-black uppercase rounded-xl transition-all ${effectiveTab === 'support' ? 'bg-blue-600 text-white' : 'text-slate-500'}`}>Meus Tickets</button>
+                <button onClick={() => setActiveTab('tasks')} className={`flex-1 py-3 px-4 whitespace-nowrap text-[10px] font-black uppercase rounded-xl transition-all ${effectiveTab === 'tasks' ? 'bg-blue-600 text-white' : 'text-slate-500'}`}>📊 Empresas</button>
               </div>
             )}
 
-            {activeTab === 'tasks' && canCreateCompanies ? (
+            {effectiveTab === 'tasks' && canCreateCompanies ? (
               <SuperAdminDashboard mode={Role.DEV} canCreateNew={true} canManageExisting={user.role === Role.DEV} />
             ) : (
               <SupportDashboard 
@@ -413,7 +451,7 @@ const App: React.FC = () => {
           </>
         ) : (
           <>
-            {activeTab === 'tasks' && (
+            {effectiveTab === 'tasks' && (
               <>
                 {user.role === Role.COMPANY && (
                   <div className="space-y-6">
@@ -425,17 +463,16 @@ const App: React.FC = () => {
             )}
             
             <div className="flex md:hidden bg-slate-900 p-1 rounded-2xl border border-slate-800 overflow-x-auto gap-1">
-               {user.role !== Role.SUPPORT && <button onClick={() => setActiveTab('tasks')} className={`flex-1 py-3 px-4 whitespace-nowrap text-[10px] font-black uppercase rounded-xl transition-all ${activeTab === 'tasks' ? 'bg-blue-600 text-white' : 'text-slate-500'}`}>Operação</button>}
-               {user.role !== Role.SUPPORT && <button onClick={() => setActiveTab('kanban-v2')} className={`flex-1 py-3 px-4 whitespace-nowrap text-[10px] font-black uppercase rounded-xl transition-all ${activeTab === 'kanban-v2' ? 'bg-purple-600 text-white' : 'text-slate-500'}`}>✨ V2</button>}
-               {user.role !== Role.SUPPORT && <button onClick={() => setActiveTab('team')} className={`flex-1 py-3 px-4 whitespace-nowrap text-[10px] font-black uppercase rounded-xl transition-all ${activeTab === 'team' ? 'bg-blue-600 text-white' : 'text-slate-500'}`}>Equipe</button>}
-               {user.role !== Role.SUPPORT && <button onClick={() => setActiveTab('organization')} className={`flex-1 py-3 px-4 whitespace-nowrap text-[10px] font-black uppercase rounded-xl transition-all ${activeTab === 'organization' ? 'bg-blue-600 text-white' : 'text-slate-500'}`}>Org.</button>}
-               {user.role !== Role.SUPPORT && <button onClick={() => setActiveTab('reports')} className={`flex-1 py-3 px-4 whitespace-nowrap text-[10px] font-black uppercase rounded-xl transition-all ${activeTab === 'reports' ? 'bg-blue-600 text-white' : 'text-slate-500'}`}>Dados</button>}
-               {user.role !== Role.SUPPORT && <button onClick={() => setActiveTab('feedback')} className={`flex-1 py-3 px-4 whitespace-nowrap text-[10px] font-black uppercase rounded-xl transition-all ${activeTab === 'feedback' ? 'bg-blue-600 text-white' : 'text-slate-500'}`}>Avisos</button>}
-               {user.role === Role.SUPPORT && <button onClick={() => setActiveTab('support')} className={`flex-1 py-3 px-4 whitespace-nowrap text-[10px] font-black uppercase rounded-xl transition-all ${activeTab === 'support' ? 'bg-blue-600 text-white' : 'text-slate-500'}`}>Meus Tickets</button>}
-               {user.role !== Role.DEV && user.role !== Role.COMPANY && <button onClick={() => setActiveTab('mytickets')} className={`flex-1 py-3 px-4 whitespace-nowrap text-[10px] font-black uppercase rounded-xl transition-all ${activeTab === 'mytickets' ? 'bg-green-600 text-white' : 'text-slate-500'}`}>📤 Suporte</button>}
+              <button onClick={() => setActiveTab('tasks')} className={`flex-1 py-3 px-4 whitespace-nowrap text-[10px] font-black uppercase rounded-xl transition-all ${effectiveTab === 'tasks' ? 'bg-blue-600 text-white' : 'text-slate-500'}`}>{primaryTabLabel}</button>
+              {canSeeV2 && <button onClick={() => setActiveTab('kanban-v2')} className={`flex-1 py-3 px-4 whitespace-nowrap text-[10px] font-black uppercase rounded-xl transition-all ${effectiveTab === 'kanban-v2' ? 'bg-purple-600 text-white' : 'text-slate-500'}`}>✨ V2</button>}
+              {canSeeTeamTab && <button onClick={() => setActiveTab('team')} className={`flex-1 py-3 px-4 whitespace-nowrap text-[10px] font-black uppercase rounded-xl transition-all ${effectiveTab === 'team' ? 'bg-blue-600 text-white' : 'text-slate-500'}`}>{teamTabLabel}</button>}
+              {canSeeOrgTab && <button onClick={() => setActiveTab('organization')} className={`flex-1 py-3 px-4 whitespace-nowrap text-[10px] font-black uppercase rounded-xl transition-all ${effectiveTab === 'organization' ? 'bg-blue-600 text-white' : 'text-slate-500'}`}>Org.</button>}
+              {canSeeReportsTab && <button onClick={() => setActiveTab('reports')} className={`flex-1 py-3 px-4 whitespace-nowrap text-[10px] font-black uppercase rounded-xl transition-all ${effectiveTab === 'reports' ? 'bg-blue-600 text-white' : 'text-slate-500'}`}>Dados</button>}
+              {canSeeFeedbackTab && <button onClick={() => setActiveTab('feedback')} className={`flex-1 py-3 px-4 whitespace-nowrap text-[10px] font-black uppercase rounded-xl transition-all ${effectiveTab === 'feedback' ? 'bg-blue-600 text-white' : 'text-slate-500'}`}>Avisos</button>}
+              {canSeeSupportTab && <button onClick={() => setActiveTab('mytickets')} className={`flex-1 py-3 px-4 whitespace-nowrap text-[10px] font-black uppercase rounded-xl transition-all ${effectiveTab === 'mytickets' ? 'bg-green-600 text-white' : 'text-slate-500'}`}>📤 Suporte</button>}
             </div>
 
-            {activeTab === 'tasks' && (
+            {effectiveTab === 'tasks' && (
               <div className="space-y-6">
                 <div className="flex justify-between items-center bg-slate-900/50 p-4 md:p-6 rounded-3xl border border-slate-800">
                   <h2 className="text-lg md:text-xl font-black uppercase tracking-tighter">Fluxo de Trabalho</h2>
@@ -474,7 +511,7 @@ const App: React.FC = () => {
               </div>
             )}
 
-            {activeTab === 'kanban-v2' && (
+            {effectiveTab === 'kanban-v2' && (
               <div className="space-y-6">
                 <div className="flex justify-between items-center bg-slate-900/50 p-4 md:p-6 rounded-3xl border border-slate-800">
                   <h2 className="text-lg md:text-xl font-black uppercase tracking-tighter">Fluxo V2.0</h2>
@@ -500,14 +537,14 @@ const App: React.FC = () => {
               </div>
             )}
 
-            {activeTab === 'organization' && (
+            {effectiveTab === 'organization' && (
               <Organograma
                 companyId={user.companyId || ''}
                 userId={user.username || user.name}
               />
             )}
 
-            {activeTab === 'team' && (
+            {effectiveTab === 'team' && (
               <div className="space-y-6">
                 {user.companyId && canDelegate && (
                   <HierarchyManagement
@@ -530,15 +567,15 @@ const App: React.FC = () => {
               </div>
             )}
 
-            {activeTab === 'reports' && (
+            {effectiveTab === 'reports' && (
               <ReportsSection tasks={visibleTasks} teamMembers={teamMembers} currentUser={user} />
             )}
 
-            {activeTab === 'feedback' && (
+            {effectiveTab === 'feedback' && (
               <FeedbackSection feedbacks={feedbacks} user={user} teamMembers={teamMembers.map(m => m.name)} onSend={handleSendFeedback} onReply={handleReplyFeedback} />
             )}
 
-            {activeTab === 'mytickets' && (
+            {effectiveTab === 'mytickets' && (
               <div className="space-y-6">
                 <div className="bg-slate-900/50 p-4 md:p-6 rounded-3xl border border-slate-800">
                   <h2 className="text-lg md:text-xl font-black uppercase tracking-tighter mb-4">Enviar Ticket para Suporte</h2>

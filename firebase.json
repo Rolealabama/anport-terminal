@@ -3,6 +3,6 @@
     "source": "functions"
   },
   "firestore": {
-    "rules": "firestore.rules"
+    "rules": "firestore-v2.rules"
   }
 }

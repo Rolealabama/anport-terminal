@@ -1,13 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { Task, TaskFlowType, TaskPriority, Permission, TaskStatus } from '../types-v2';
-import { TaskService } from '../services/TaskService';
+import { CreateTaskRequest, TaskFlowType, TaskPriority, Permission } from '../types-v2';
 
 interface NewTaskModalV2Props {
   userId: string;
   companyId: string;
   userPermissions: Permission[];
   onClose: () => void;
-  onSubmit: (task: Omit<Task, 'id' | 'createdAt' | 'version'>) => void;
+  onSubmit: (request: CreateTaskRequest) => void;
   onError?: (error: string) => void;
 }
 
@@ -107,25 +106,17 @@ const NewTaskModalV2: React.FC<NewTaskModalV2Props> = ({
     try {
       setIsLoading(true);
 
-      const task: Omit<Task, 'id' | 'createdAt' | 'version'> = {
-        companyId,
-        createdById: userId,
+      const request: CreateTaskRequest = {
         title: formData.title,
         description: formData.description,
         flowType: formData.flowType as TaskFlowType,
         assignedToUserId: formData.assignedToUserId || undefined,
         assignedToDepartmentId: formData.assignedToDepartmentId || undefined,
-        status: TaskStatus.TODO,
         priority: formData.priority,
-        dueDate: formData.dueDate,
-        escalationPath: [],
-        metadata: {
-          createdAt: Date.now(),
-          updatedAt: Date.now()
-        }
+        dueDate: formData.dueDate
       };
 
-      onSubmit(task);
+      onSubmit(request);
       onClose();
     } catch (error) {
       onError?.(`Erro ao criar tarefa: ${error instanceof Error ? error.message : 'Desconhecido'}`);

@@ -28,6 +28,14 @@ Company
 **Antes:** Baseado em roles fixos (DEV, COMPANY, ADMIN, SUPPORT, USER)  
 **Depois:** Permissões granulares customizáveis por empresa
 
+### **2.1 Autenticação**
+**Antes (V1):** login custom client-side baseado em collections legadas.
+
+**Depois (V2):** Firebase Auth via **custom token** emitido pela callable `loginWithPassword`.
+
+**Implicação chave:**
+- O `uid` autenticado ($request.auth.uid$) deve ser o **docId** do usuário em `users/{userId}`.
+
 ### **3. Fluxo de Tarefas**
 **Antes:** Tarefas simples com status linear  
 **Depois:** Fluxo hierárquico com escalação automática
@@ -123,6 +131,8 @@ tasks_v2 {
 - [ ] Criar collections V2 em paralelo às V1
 - [ ] Implementar script de migração de dados
 - [ ] Configurar Firestore Rules V2
+- [ ] Habilitar Firebase Authentication
+- [ ] Deploy das Cloud Functions (callable `loginWithPassword`)
 - [ ] Testes unitários dos novos serviços
 
 ### **Fase 2: Migração de Dados (Semana 2)**
@@ -146,6 +156,7 @@ async function migrateV1ToV2() {
 ### **Fase 4: Switch (Semana 4)**
 - [ ] Deploy do frontend V2
 - [ ] Ativação das Firestore Rules V2
+- [ ] Deploy das Cloud Functions (login + automações/push)
 - [ ] Monitoramento 24/7
 - [ ] Rollback disponível se necessário
 
@@ -225,6 +236,11 @@ user_sessions/
 - Impedem vazamento entre empresas
 - Logs são imutáveis
 
+### **Auth + Rules (essencial)**
+- As rules V2 dependem de `request.auth`.
+- O login V2 autentica via Firebase Auth (custom token), então `request.auth.uid` passa a existir.
+- A callable `loginWithPassword` busca o usuário em `users` por `username` e valida `companyId`.
+
 ---
 
 ## 🎯 Métricas de Sucesso
@@ -240,9 +256,8 @@ user_sessions/
 ## 🚨 Rollback Plan
 
 Se necessário reverter:
-1. Desativar Firestore Rules V2
-2. Ativar Firestore Rules V1
-3. Deploy frontend V1
+1. Reverter para o último release/commit estável no Git
+2. Re-deploy de `firestore:rules` e `functions` conforme a versão revertida
 4. Análise post-mortem
 5. Correção e nova tentativa
 

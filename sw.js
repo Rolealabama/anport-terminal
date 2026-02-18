@@ -2,10 +2,7 @@ const CACHE_NAME = 'ecomm-cloud-cache-v11';
 const URLS_TO_CACHE = [
   '/',
   '/index.html',
-  '/index.tsx',
-  '/types.ts',
-  '/App.tsx',
-  'https://cdn.tailwindcss.com'
+  '/manifest.json'
 ];
 
 self.addEventListener('install', event => {

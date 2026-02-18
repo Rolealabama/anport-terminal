@@ -233,9 +233,8 @@ Push para `main` dispara deploy automático via GitHub Actions.
 - `services/*` - Serviços da aplicação
 - `seed-data.ts` - Dados de teste
 
-### **V1 (Legado - Manter por compatibilidade)**
-- `types.ts` - Mantido para componentes antigos
-- Componentes em `/components` - Ainda em V1
+### **V1 (Legado)**
+- Removido do frontend (migração big-bang para V2)
 
 ---
 

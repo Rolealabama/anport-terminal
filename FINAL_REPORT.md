@@ -39,9 +39,8 @@ const SUPERADMIN_PASS = import.meta.env.VITE_SUPERADMIN_PASSWORD;
 ```
 
 **Arquivos Modificados:**
-- `components/Login.tsx` - SuperAdmin agora usa env vars
-- `.env.example` - Template atualizado com SuperAdmin
-- `.env` - Arquivo local configurado (não vai para Git)
+- `components/LoginV2.tsx` - Login via Firebase Auth (custom token)
+- `functions/index.js` - Callable `loginWithPassword` (valida senha hash+salt e emite token)
 
 #### **1.2. Verificação .gitignore**
 
@@ -70,12 +69,12 @@ const SUPERADMIN_PASS = import.meta.env.VITE_SUPERADMIN_PASSWORD;
 | `tests/e2e/regression.spec.ts` | Conforme solicitado |
 | `tests/e2e/regression-trace.spec.ts` | Conforme solicitado |
 
-#### **Arquivos Mantidos (V1 - Compatibilidade):**
+#### **Arquivos Mantidos (V2):**
 
 | Arquivo | Motivo |
 |---------|--------|
-| `types.ts` | Componentes ainda dependem |
-| Arquivos em `/components/*` | Migração futura |
+| `types-v2.ts` | Tipagens V2 (SaaS multiempresa) |
+| `services/*` (V2) | Serviços de autorização, realtime e tarefas |
 
 ---
 
@@ -293,7 +292,7 @@ Se houver falhas, ajuste os mocks conforme necessário.
 
 ### **4. Compatibilidade V1**
 
-Componentes ainda usam `types.ts` (V1). Migração futura pode ser necessária.
+Frontend foi migrado para V2-only. Para dados legados V1, use o script de migração.
 
 ---
 

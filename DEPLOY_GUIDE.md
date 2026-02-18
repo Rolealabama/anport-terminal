@@ -35,9 +35,9 @@ npm install
 #### **3.2. Ative os Serviços Necessários**
 
 - ✅ **Firestore Database** (modo produção)
-- ✅ **Authentication** (opcional, para futuras features)
+- ✅ **Authentication** (obrigatório: app usa Firebase Auth)
 - ✅ **Hosting** (para deploy)
-- ✅ **Cloud Functions** (se usar)
+- ✅ **Cloud Functions** (obrigatório: login usa callable `loginWithPassword`)
 
 #### **3.3. Obtenha as Credenciais**
 
@@ -65,11 +65,7 @@ VITE_FIREBASE_STORAGE_BUCKET=seu-projeto.appspot.com
 VITE_FIREBASE_MESSAGING_SENDER_ID=seu-sender-id
 VITE_FIREBASE_APP_ID=seu-app-id
 VITE_FIREBASE_MEASUREMENT_ID=seu-measurement-id
-V ITE_FIREBASE_VAPID_KEY=seu-vapid-key
-
-# SuperAdmin (USE SENHA FORTE EM PRODUÇÃO!)
-VITE_SUPERADMIN_USERNAME=superadmin
-VITE_SUPERADMIN_PASSWORD=SUA-SENHA-FORTE-AQUI
+VITE_FIREBASE_VAPID_KEY=seu-vapid-key
 ```
 
 ### **5. Deploy das Regras de Segurança**
@@ -83,6 +79,14 @@ firebase init
 
 # Deploy das regras
 firebase deploy --only firestore:rules
+```
+
+### **5.1 Deploy das Cloud Functions (Login + Push)**
+
+O login V2 usa a callable `loginWithPassword` para validar usuário/senha no Firestore e emitir um custom token do Firebase Auth.
+
+```bash
+firebase deploy --only functions
 ```
 
 ### **6. Rode o Projeto Localmente**

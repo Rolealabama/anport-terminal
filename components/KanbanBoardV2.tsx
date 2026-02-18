@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
-import { Task, TaskStatus, TaskPriority } from '../types-v2';
+import { Permission, Task, TaskStatus, TaskPriority } from '../types-v2';
 import { TaskService } from '../services/TaskService';
 import { RealtimeService } from '../services/RealtimeService';
 
 interface KanbanBoardV2Props {
   tasks: Task[];
   userId: string;
-  userPermissions: string[];
+  userPermissions: Permission[];
   onTaskMove?: (taskId: string, status: TaskStatus) => void;
   onTaskUpdate?: (task: Task) => void;
   onError?: (error: string) => void;
@@ -30,6 +30,22 @@ const KanbanBoardV2: React.FC<KanbanBoardV2Props> = ({
     { status: TaskStatus.DONE, label: 'Concluído', color: 'green', icon: '✅' },
     { status: TaskStatus.BLOCKED, label: 'Bloqueado', color: 'red', icon: '🚫' }
   ];
+
+  const textColorClass: Record<string, string> = {
+    blue: 'text-blue-400',
+    amber: 'text-amber-400',
+    purple: 'text-purple-400',
+    green: 'text-green-400',
+    red: 'text-red-400'
+  };
+
+  const dotColorClass: Record<string, string> = {
+    blue: 'bg-blue-500',
+    amber: 'bg-amber-500',
+    purple: 'bg-purple-500',
+    green: 'bg-green-500',
+    red: 'bg-red-500'
+  };
 
   const getTasksForStatus = (status: TaskStatus) => {
     return tasks.filter(t => t.status === status).sort((a, b) => {
@@ -120,7 +136,7 @@ const KanbanBoardV2: React.FC<KanbanBoardV2Props> = ({
           <div key={col.status} className="bg-slate-900/50 border border-slate-800 rounded-xl p-3 text-center">
             <div className="text-2xl mb-1">{col.icon}</div>
             <div className="text-xs font-bold text-slate-300 uppercase">{col.label}</div>
-            <div className={`text-lg font-black text-${col.color}-400`}>
+            <div className={`text-lg font-black ${textColorClass[col.color] || 'text-slate-400'}`}>
               {getTasksForStatus(col.status).length}
             </div>
           </div>
@@ -132,7 +148,7 @@ const KanbanBoardV2: React.FC<KanbanBoardV2Props> = ({
         {columns.map(col => (
           <div key={col.status} className="flex flex-col gap-3">
             <div className="flex items-center gap-2 px-2 py-1">
-              <div className={`w-1.5 h-1.5 rounded-full bg-${col.color}-500`}></div>
+              <div className={`w-1.5 h-1.5 rounded-full ${dotColorClass[col.color] || 'bg-slate-500'}`}></div>
               <h3 className="text-xs font-black text-slate-400 uppercase tracking-wider">{col.label}</h3>
             </div>
 

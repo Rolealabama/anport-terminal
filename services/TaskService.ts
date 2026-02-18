@@ -444,9 +444,14 @@ export class TaskService {
     updates: Partial<Task>
   ): Promise<{ success: boolean; error?: string }> {
     try {
-      const taskRef = doc(db, 'tasks', taskId);
+      const taskRef = doc(db, 'tasks_v2', taskId);
+      const snap = await getDoc(taskRef);
+      if (!snap.exists()) return { success: false, error: 'Tarefa não encontrada' };
+      const current = snap.data() as Task;
+
       await updateDoc(taskRef, {
         ...updates,
+        version: (current.version || 1) + 1,
         'metadata.updatedAt': Date.now()
       });
       return { success: true };

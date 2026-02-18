@@ -337,47 +337,7 @@ function OrganizationChartV2({ companyId }: { companyId: string }) {
 ---
 
 ### **Notificações em Tempo Real**
-- [ ] Criar `components/NotificationCenter.tsx`
-- [ ] Usar `RealtimeService.subscribeToNotifications()`
-- [ ] Toasts para novas notificações
-- [ ] Badge de contagem
-
-**Exemplo:**
-```tsx
-function NotificationCenter({ userId }: { userId: string }) {
-  const [notifications, setNotifications] = useState<RealtimeNotification[]>([]);
-
-  useEffect(() => {
-    const listenerId = RealtimeService.subscribeToNotifications(
-      userId,
-      (notification) => {
-        setNotifications(prev => [notification, ...prev]);
-        
-        // Mostra toast
-        toast.info(notification.title, { description: notification.message });
-      }
-    );
-
-    return () => RealtimeService.unsubscribe(listenerId);
-  }, [userId]);
-
-  return (
-    <Dropdown>
-      <DropdownTrigger>
-        <Button>
-          🔔 {notifications.filter(n => !n.read).length}
-        </Button>
-      </DropdownTrigger>
-
-      <DropdownContent>
-        {notifications.map(notif => (
-          <NotificationItem key={notif.id} notification={notif} />
-        ))}
-      </DropdownContent>
-    </Dropdown>
-  );
-}
-```
+- [x] Removido: `NotificationCenter` não era usado no app e foi excluído durante cleanup.
 
 ---
 

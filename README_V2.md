@@ -15,6 +15,33 @@ Transformamos seu sistema de Kanban multi-tenant em um **SaaS corporativo enterp
 
 ---
 
+## 🔐 Autenticação (V2)
+
+O frontend está **V2-only** e usa **Firebase Auth** via **custom token** emitido por uma Cloud Function.
+
+**Fluxo:**
+1. Usuário informa `companyId`, `username` e `password` em `components/LoginV2.tsx`.
+2. O app chama a callable `loginWithPassword` (Cloud Functions).
+3. A function valida o usuário no Firestore (`users`) e emite um **custom token**.
+4. O app faz `signInWithCustomToken(...)`.
+5. As `firestore-v2.rules` usam `request.auth.uid` (mesmo valor do `users/{userId}`) para autorizar leituras/escritas.
+
+**Pré-requisitos (produção):**
+- Firebase **Authentication** habilitado.
+- Deploy das **Cloud Functions** (para a callable `loginWithPassword`).
+
+**Deploy:**
+```bash
+firebase deploy --only firestore:rules
+firebase deploy --only functions
+```
+
+**Observação sobre senha:**
+- O schema V2 armazena `users.password` como hash SHA-256 em hex de `password + passwordSalt`.
+- O script `seed-data.ts` já gera dados compatíveis.
+
+---
+
 ## 📁 ARQUIVOS CRIADOS
 
 ### **1. Types & Interfaces**

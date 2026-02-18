@@ -10,6 +10,14 @@ vi.mock('firebase/firestore', () => ({
   getFirestore: vi.fn(() => ({ db: true }))
 }));
 
+vi.mock('firebase/auth', () => ({
+  getAuth: vi.fn(() => ({ auth: true }))
+}));
+
+vi.mock('firebase/functions', () => ({
+  getFunctions: vi.fn(() => ({ functions: true }))
+}));
+
 import { getFirestore } from 'firebase/firestore';
 
 describe('firebase', () => {

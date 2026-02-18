@@ -1,7 +1,8 @@
 const admin = require('firebase-admin');
 const logger = require('firebase-functions/logger');
 const { onDocumentCreated, onDocumentUpdated } = require('firebase-functions/v2/firestore');
-const { onRequest } = require('firebase-functions/v2/https');
+const { onRequest, onCall } = require('firebase-functions/v2/https');
+const crypto = require('node:crypto');
 
 if (!admin.apps.length) {
   admin.initializeApp();
@@ -195,6 +196,58 @@ const validateRequestApiKey = (req, res) => {
 
   return true;
 };
+
+const hashPasswordSha256 = (password, salt) => {
+  const normalizedPassword = String(password || '');
+  const normalizedSalt = String(salt || '');
+  return crypto.createHash('sha256').update(normalizedPassword + normalizedSalt).digest('hex');
+};
+
+exports.loginWithPassword = onCall(
+  {
+    region: DEFAULT_REGION
+  },
+  async (request) => {
+    const payload = request.data || {};
+    const companyId = String(payload.companyId || '').trim();
+    const username = String(payload.username || '').toLowerCase().trim();
+    const password = String(payload.password || '');
+
+    if (!companyId || !username || !password) {
+      throw new Error('Dados de login inválidos');
+    }
+
+    const snapshot = await db.collection('users').where('username', '==', username).get();
+    const docSnap = snapshot.docs.find((d) => String(d.data()?.companyId || '') === companyId);
+    if (!docSnap) {
+      throw new Error('Credenciais inválidas');
+    }
+
+    const user = docSnap.data() || {};
+    if (user.status && String(user.status) !== 'active') {
+      throw new Error('Usuário desativado');
+    }
+
+    const expectedHash = String(user.password || '');
+    const salt = String(user.passwordSalt || '');
+    const inputHash = salt ? hashPasswordSha256(password, salt) : '';
+
+    const passwordMatches = expectedHash === password || (inputHash && expectedHash === inputHash);
+    if (!passwordMatches) {
+      throw new Error('Credenciais inválidas');
+    }
+
+    const uid = docSnap.id;
+    const token = await admin.auth().createCustomToken(uid, {
+      companyId: String(user.companyId || ''),
+      roleId: String(user.roleId || ''),
+      departmentId: String(user.departmentId || ''),
+      username: String(user.username || username)
+    });
+
+    return { token, userId: uid };
+  }
+);
 
 exports.sendPushByRole = onRequest(
   {
@@ -556,6 +609,85 @@ exports.onTaskReassignedPush = onDocumentUpdated(
       taskId,
       previousResponsible,
       newResponsible,
+      ...result
+    });
+  }
+);
+
+exports.onTaskAssignedPushV2 = onDocumentCreated(
+  {
+    region: DEFAULT_REGION,
+    document: 'tasks_v2/{taskId}'
+  },
+  async (event) => {
+    const task = event.data?.data();
+    if (!task) return;
+
+    const taskId = event.params.taskId;
+    const assignedToUserId = normalizeText(task.assignedToUserId);
+    if (!assignedToUserId) return;
+
+    const companyId = normalizeText(task.companyId);
+
+    const result = await sendPushToTargets({
+      title: 'Nova tarefa designada para você',
+      body: normalizeText(task.title) || 'Você recebeu uma nova tarefa',
+      data: {
+        type: 'task_assigned_v2',
+        taskId,
+        companyId,
+        url: getTaskUrl(taskId)
+      },
+      userIds: [assignedToUserId],
+      companyId
+    });
+
+    logger.info('Push de tarefa designada V2 (criação) enviado', {
+      taskId,
+      assignedToUserId,
+      companyId,
+      ...result
+    });
+  }
+);
+
+exports.onTaskReassignedPushV2 = onDocumentUpdated(
+  {
+    region: DEFAULT_REGION,
+    document: 'tasks_v2/{taskId}'
+  },
+  async (event) => {
+    const before = event.data?.before?.data();
+    const after = event.data?.after?.data();
+    if (!before || !after) return;
+
+    const previousAssignedToUserId = normalizeText(before.assignedToUserId);
+    const newAssignedToUserId = normalizeText(after.assignedToUserId);
+    if (!newAssignedToUserId || previousAssignedToUserId === newAssignedToUserId) return;
+
+    const taskId = event.params.taskId;
+    const companyId = normalizeText(after.companyId);
+
+    const result = await sendPushToTargets({
+      title: 'Tarefa atribuída para você',
+      body: normalizeText(after.title) || 'Você recebeu uma tarefa',
+      data: {
+        type: 'task_reassigned_v2',
+        taskId,
+        companyId,
+        previousAssignedToUserId,
+        newAssignedToUserId,
+        url: getTaskUrl(taskId)
+      },
+      userIds: [newAssignedToUserId],
+      companyId
+    });
+
+    logger.info('Push de tarefa reatribuída V2 enviado', {
+      taskId,
+      previousAssignedToUserId,
+      newAssignedToUserId,
+      companyId,
       ...result
     });
   }

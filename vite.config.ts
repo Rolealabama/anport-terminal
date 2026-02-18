@@ -34,13 +34,7 @@ export default defineConfig(({ mode }) => {
             'scripts/**',
             'dist/**',
             'coverage/**',
-            'node_modules/**',
-            'components/MyTickets.tsx',
-            'components/ReportsSection.tsx',
-            'components/SuperAdminDashboard.tsx',
-            'components/TaskCard.tsx',
-            'components/UserTicketCreation.tsx',
-            'services/PushNotificationService.ts'
+            'node_modules/**'
           ],
           reporter: ['text', 'json', 'json-summary', 'html'],
           reportsDirectory: './coverage',

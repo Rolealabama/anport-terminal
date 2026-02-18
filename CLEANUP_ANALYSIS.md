@@ -18,17 +18,14 @@
 - ✅ `TESTING_GUIDE_V2.md`
 
 ### **Arquivos V1 (Antigos - ANÁLISE NECESSÁRIA):**
-- ⚠️ `types.ts` - MANTIDO (compatibilidade com componentes existentes)
-- ⚠️ Todos os componentes em `/components/*` - Ainda usam V1
-- ⚠️ `App.tsx` - Usa V1
-- ⚠️ Serviços antigos em `/services/*` que não foram migrados
+- ✅ Removidos do frontend (migração big-bang para V2)
 
 ### **Testes de Regressão (REMOVER conforme solicitado):**
 - ❌ `tests/e2e/regression.spec.ts`
 - ❌ `tests/e2e/regression-trace.spec.ts`
 
 ### **Testes Unitários (ATUALIZAR para V2):**
-- 🔄 Todos em `tests/unit/*` - Precisam ser atualizados/recriados
+- ✅ Atualizados: suíte agora foca nos módulos V2 (Auth/App/Services V2)
 
 ---
 
@@ -40,9 +37,8 @@
 3. ❌ Limpar scripts de organização obsoletos
 
 ### **Fase 2: Atualização**
-1. 🔄 Manter `types.ts` temporariamente (componentes dependem)
-2. 🔄 Atualizar testes unitários para V2
-3. 🔄 Criar novos testes com foco em cobertura 90%+
+1. ✅ Migrar frontend para V2-only
+2. ✅ Atualizar testes unitários para V2
 
 ### **Fase 3: Documentação**
 1. ✅ Criar guia de uso das variáveis de ambiente

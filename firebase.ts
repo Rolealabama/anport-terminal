@@ -1,5 +1,7 @@
 import { initializeApp, getApps, getApp } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
+import { getAuth } from "firebase/auth";
+import { getFunctions } from "firebase/functions";
 
 const env = import.meta.env;
 
@@ -32,6 +34,8 @@ const app = isFirebaseConfigured
 
 export { app };
 export const db = getFirestore(app);
+export const auth = getAuth(app);
+export const functions = getFunctions(app, 'southamerica-east1');
 
 /**
  * EXEMPLO DE USO (LEITURA/ESCRITA):

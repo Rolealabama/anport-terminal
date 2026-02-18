@@ -8,14 +8,13 @@ import {
   doc,
   getDoc,
   updateDoc,
+  setDoc,
   runTransaction,
   query,
   collection,
   where,
   getDocs,
-  addDoc,
   deleteDoc,
-  Timestamp
 } from 'firebase/firestore';
 import { Task, TaskStatus, DistributedLock, TaskHistoryEntry } from '../types-v2';
 import { AuthorizationService } from './AuthorizationService';
@@ -301,7 +300,7 @@ export class KanbanService {
       }
 
       // Cria novo lock
-      await addDoc(collection(db, 'distributed_locks'), {
+      await setDoc(doc(db, 'distributed_locks', lockId), {
         id: lockId,
         resourceType: 'task',
         resourceId: taskId,

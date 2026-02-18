@@ -250,6 +250,74 @@ exports.loginWithPassword = onCall(
   }
 );
 
+exports.loginWithPasswordHttp = onRequest(
+  {
+    region: DEFAULT_REGION,
+    cors: true
+  },
+  async (req, res) => {
+    if (req.method === 'OPTIONS') {
+      res.status(204).send('');
+      return;
+    }
+
+    if (req.method !== 'POST') {
+      res.status(405).json({ error: 'Use POST' });
+      return;
+    }
+
+    try {
+      const payload = req.body || {};
+      const companyId = String(payload.companyId || '').trim();
+      const username = String(payload.username || '').toLowerCase().trim();
+      const password = String(payload.password || '');
+
+      if (!companyId || !username || !password) {
+        res.status(400).json({ error: 'Dados de login inválidos' });
+        return;
+      }
+
+      const snapshot = await db.collection('users').where('username', '==', username).get();
+      const docSnap = snapshot.docs.find((d) => String(d.data()?.companyId || '') === companyId);
+      if (!docSnap) {
+        res.status(401).json({ error: 'Credenciais inválidas' });
+        return;
+      }
+
+      const user = docSnap.data() || {};
+      if (user.status && String(user.status) !== 'active') {
+        res.status(403).json({ error: 'Usuário desativado' });
+        return;
+      }
+
+      const expectedHash = String(user.password || '');
+      const salt = String(user.passwordSalt || '');
+      const inputHash = salt ? hashPasswordSha256(password, salt) : '';
+
+      const passwordMatches = expectedHash === password || (inputHash && expectedHash === inputHash);
+      if (!passwordMatches) {
+        res.status(401).json({ error: 'Credenciais inválidas' });
+        return;
+      }
+
+      const uid = docSnap.id;
+      const token = await admin.auth().createCustomToken(uid, {
+        companyId: String(user.companyId || ''),
+        roleId: String(user.roleId || ''),
+        departmentId: String(user.departmentId || ''),
+        username: String(user.username || username)
+      });
+
+      res.status(200).json({ token, userId: uid });
+    } catch (error) {
+      logger.error('Erro loginWithPasswordHttp', {
+        message: error?.message || String(error)
+      });
+      res.status(500).json({ error: 'Erro ao efetuar login' });
+    }
+  }
+);
+
 exports.sendPushByRole = onRequest(
   {
     region: DEFAULT_REGION,

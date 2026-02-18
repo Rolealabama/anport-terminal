@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { signInWithCustomToken } from 'firebase/auth';
-import { httpsCallable } from 'firebase/functions';
-import { auth, functions, isFirebaseConfigured } from '../firebase';
+import { auth, isFirebaseConfigured } from '../firebase';
 
 type LoginResult = { token: string; userId: string };
 
@@ -20,14 +19,31 @@ const LoginV2: React.FC = () => {
     setLoading(true);
 
     try {
-      const callable = httpsCallable(functions, 'loginWithPassword');
-      const result = await callable({
-        companyId: companyId.trim(),
-        username: username.trim(),
-        password
+      const projectId = String(import.meta.env.VITE_FIREBASE_PROJECT_ID || '').trim();
+      if (!projectId) {
+        setError('VITE_FIREBASE_PROJECT_ID não configurado.');
+        return;
+      }
+
+      const endpoint = `https://southamerica-east1-${projectId}.cloudfunctions.net/loginWithPasswordHttp`;
+
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          companyId: companyId.trim(),
+          username: username.trim(),
+          password
+        })
       });
 
-      const data = result.data as LoginResult;
+      const payload = (await response.json().catch(() => ({}))) as any;
+      if (!response.ok) {
+        setError(String(payload?.error || 'Falha no login.'));
+        return;
+      }
+
+      const data = payload as LoginResult;
       if (!data?.token) {
         setError('Falha no login.');
         return;

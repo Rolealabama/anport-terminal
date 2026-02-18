@@ -27,6 +27,15 @@ const canManageTarget = (current: Role, target: Role) => {
   return false;
 };
 
+const roleLabel = (r: Role) => {
+  const rr = normalizeRole(r);
+  if (rr === Role.COMPANY) return 'RESPONSÁVEL';
+  if (rr === Role.MANAGER) return 'GESTOR';
+  if (rr === Role.SUPERVISOR) return 'SUPERVISOR';
+  if (rr === Role.USER) return 'COLABORADOR';
+  return String(r).toUpperCase();
+};
+
 type StoreOption = { id: string; name?: string };
 
 interface HierarchyManagementProps {
@@ -38,6 +47,45 @@ interface HierarchyManagementProps {
 
 const HierarchyManagement: React.FC<HierarchyManagementProps> = ({ companyId, currentUsername, currentRole, members }) => {
   const normalizedCurrent = currentUsername.toLowerCase().trim();
+
+  const normalizedMembers = useMemo(() => {
+    const pickPreferred = (a: CompanyMemberRecord, b: CompanyMemberRecord) => {
+      const aActive = a.isActive !== false;
+      const bActive = b.isActive !== false;
+      if (aActive !== bActive) return aActive ? a : b;
+
+      const score = (m: CompanyMemberRecord) => {
+        let s = 0;
+        if ((m.name || '').trim()) s += 3;
+        if ((m.role || '').toString()) s += 2;
+        if ((m.leaderUsername || '').toString()) s += 1;
+        if ((m.storeId || '').toString()) s += 1;
+        if ((m.password || '').toString()) s += 1;
+        if ((m.passwordSalt || '').toString()) s += 1;
+        return s;
+      };
+
+      const sa = score(a);
+      const sb = score(b);
+      if (sa !== sb) return sa > sb ? a : b;
+
+      const ta = Number((a as any).createdAt || 0);
+      const tb = Number((b as any).createdAt || 0);
+      if (ta !== tb) return ta > tb ? a : b;
+      return a;
+    };
+
+    const map = new Map<string, CompanyMemberRecord>();
+    for (const m of members) {
+      const uname = (m.username || '').toLowerCase().trim();
+      if (!uname) continue;
+      const normalized: CompanyMemberRecord = { ...m, username: uname };
+      const existing = map.get(uname);
+      map.set(uname, existing ? pickPreferred(existing, normalized) : normalized);
+    }
+
+    return Array.from(map.values());
+  }, [members]);
 
   const [stores, setStores] = useState<StoreOption[]>([]);
   const [saving, setSaving] = useState(false);
@@ -51,13 +99,13 @@ const HierarchyManagement: React.FC<HierarchyManagementProps> = ({ companyId, cu
     storeId: ''
   });
 
-  const childrenMap = useMemo(() => buildChildrenMap(members), [members]);
+  const childrenMap = useMemo(() => buildChildrenMap(normalizedMembers), [normalizedMembers]);
   const descendantUsernames = useMemo(() => getDescendants(childrenMap, normalizedCurrent), [childrenMap, normalizedCurrent]);
   const memberByUsername = useMemo(() => {
     const map = new Map<string, CompanyMemberRecord>();
-    for (const m of members) map.set((m.username || '').toLowerCase().trim(), m);
+    for (const m of normalizedMembers) map.set((m.username || '').toLowerCase().trim(), m);
     return map;
-  }, [members]);
+  }, [normalizedMembers]);
 
   const isCompanyAdmin = currentRole === Role.COMPANY;
   const canManage = [Role.COMPANY, Role.MANAGER, Role.SUPERVISOR, Role.ADMIN].includes(currentRole);
@@ -65,27 +113,34 @@ const HierarchyManagement: React.FC<HierarchyManagementProps> = ({ companyId, cu
   // Escopo: cada cargo gerencia a própria subárvore (+ ele mesmo)
   const scopeUsernames = useMemo(() => {
     if (isCompanyAdmin) {
-      return new Set<string>(members.map(m => (m.username || '').toLowerCase().trim()).filter(Boolean));
+      return new Set<string>(normalizedMembers.map(m => (m.username || '').toLowerCase().trim()).filter(Boolean));
     }
 
     const set = new Set<string>([normalizedCurrent]);
     for (const u of descendantUsernames) set.add(u);
     return set;
-  }, [descendantUsernames, normalizedCurrent]);
+  }, [descendantUsernames, normalizedCurrent, isCompanyAdmin, normalizedMembers]);
 
   const visibleMembers = useMemo(() => {
     if (!canManage) return [];
-    return members
+    return normalizedMembers
       .filter(m => m.isActive !== false)
       .filter(m => scopeUsernames.has((m.username || '').toLowerCase().trim()))
-      .sort((a, b) => (a.role + a.username).localeCompare(b.role + b.username));
-  }, [canManage, members, scopeUsernames]);
+      .sort((a, b) => {
+        const ar = roleRank(a.role);
+        const br = roleRank(b.role);
+        if (ar !== br) return br - ar;
+        const an = (a.name || '').localeCompare(b.name || '');
+        if (an !== 0) return an;
+        return (a.username || '').localeCompare(b.username || '');
+      });
+  }, [canManage, normalizedMembers, scopeUsernames]);
 
   const possibleLeaders = useMemo(() => {
     // Líder pode ser qualquer um dentro do meu escopo (incluindo eu)
     return visibleMembers
       .map(m => ({ username: m.username.toLowerCase().trim(), name: m.name, role: m.role }))
-      .sort((a, b) => a.name.localeCompare(b.name));
+      .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
   }, [visibleMembers]);
 
   const allowedRoles = useMemo(() => {
@@ -392,7 +447,7 @@ const HierarchyManagement: React.FC<HierarchyManagementProps> = ({ companyId, cu
             ) : (
               visibleMembers.map(m => (
                 <MemberRow
-                  key={m.id}
+                  key={m.id || (m.username || '').toLowerCase().trim()}
                   member={m}
                   possibleLeaders={possibleLeaders}
                   stores={stores}
@@ -437,7 +492,7 @@ const MemberRow: React.FC<{
       <div className="min-w-0">
         <div className="flex items-center gap-2">
           <span className="text-[10px] font-black text-blue-400 uppercase">@{uname}</span>
-          <span className="text-[9px] font-black text-slate-600 uppercase">{member.role}</span>
+          <span className="text-[9px] font-black text-slate-600 uppercase">{roleLabel(member.role)}</span>
           {member.storeId && <span className="text-[9px] font-black text-slate-600 uppercase">• {member.storeId}</span>}
         </div>
         <p className="text-sm font-bold text-slate-100 truncate">{member.name}</p>

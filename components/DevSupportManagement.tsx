@@ -6,6 +6,7 @@ import { db } from '../firebase.ts';
 import { collection, onSnapshot, doc, setDoc, deleteDoc } from 'firebase/firestore';
 
 const VALID_USER = /^[a-z0-9_]{3,15}$/;
+const DEFAULT_SUPPORT_COMPANY_ID = 'ANPORT';
 
 interface DevSupportManagementProps {
   devId: string;
@@ -61,6 +62,7 @@ const DevSupportManagement: React.FC<DevSupportManagementProps> = ({ devId }) =>
         username: cleanUser,
         name: formData.name.trim(),
         role: Role.SUPPORT,
+        companyId: DEFAULT_SUPPORT_COMPANY_ID,
         password: finalPassword,
         passwordSalt: finalSalt,
         email: formData.email || '',

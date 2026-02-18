@@ -12,6 +12,7 @@ const VALID_USER = /^[a-z0-9_]{3,15}$/;
 interface SuperAdminDashboardProps {
   mode: Role.DEV | Role.COMPANY | Role.SUPPORT;
   companyId?: string;
+  currentUsername?: string;
   canCreateNew?: boolean;
   canManageExisting?: boolean;
 }
@@ -19,6 +20,7 @@ interface SuperAdminDashboardProps {
 const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
   mode,
   companyId,
+  currentUsername,
   canCreateNew = true,
   canManageExisting = true
 }) => {
@@ -98,6 +100,23 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
           createdAt: formData.createdAt || Date.now(),
           isSuspended: formData.isSuspended || false
         });
+
+        // Cria/atualiza o responsável inicial da empresa (multi-admin via company_members)
+        const companyAdminUsername = (formData.adminUsername || '').toLowerCase().trim();
+        if (companyAdminUsername) {
+          await setDoc(doc(db, "company_members", `${cleanId}__${companyAdminUsername}`), {
+            companyId: cleanId,
+            username: companyAdminUsername,
+            name: formData.name,
+            role: Role.COMPANY,
+            leaderUsername: null,
+            storeId: null,
+            isActive: true,
+            password: finalPassword,
+            passwordSalt: finalSalt,
+            createdAt: formData.createdAt || Date.now()
+          }, { merge: true });
+        }
       } else if (mode === Role.COMPANY) {
         await setDoc(doc(db, "stores", cleanId), {
           ...formData,
@@ -107,6 +126,23 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
           passwordSalt: finalSalt,
           createdAt: formData.createdAt || Date.now()
         });
+
+        // Cria/atualiza o gestor da unidade como membro da empresa
+        const managerUsername = (formData.adminUsername || '').toLowerCase().trim();
+        if (managerUsername) {
+          await setDoc(doc(db, "company_members", `${companyId}__${managerUsername}`), {
+            companyId: companyId!,
+            username: managerUsername,
+            name: formData.adminName || managerUsername,
+            role: Role.MANAGER,
+            leaderUsername: currentUsername ? currentUsername.toLowerCase().trim() : null,
+            storeId: cleanId,
+            isActive: true,
+            password: finalPassword,
+            passwordSalt: finalSalt,
+            createdAt: formData.createdAt || Date.now()
+          }, { merge: true });
+        }
       } else if (mode === Role.SUPPORT) {
         const cleanUser = formData.adminUsername.toLowerCase().trim();
         await setDoc(doc(db, "support_users", cleanUser), {

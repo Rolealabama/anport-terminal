@@ -279,7 +279,7 @@ export const SupportDashboard: React.FC<SupportDashboardProps> = ({
                 createdAt: serverTimestamp(),
                 createdBy: userId,
                 createdByRole: userRole,
-                companyId,
+                companyId: companyId || 'ANPORT',
                 status: 'aberto'
               });
             }

@@ -3,10 +3,11 @@ import { Task, Status } from '../types.ts';
 
 interface AdminStatsProps {
   tasks: Task[];
-  teamMembers: string[];
+  teamMembers: string[]; // usernames
+  memberDirectory?: Record<string, string>;
 }
 
-const AdminStats: React.FC<AdminStatsProps> = ({ tasks, teamMembers }) => {
+const AdminStats: React.FC<AdminStatsProps> = ({ tasks, teamMembers, memberDirectory }) => {
   const total = tasks.length;
   const completed = tasks.filter(t => t.status === Status.DONE).length;
   const inProgress = tasks.filter(t => t.status === Status.DOING).length;
@@ -50,11 +51,12 @@ const AdminStats: React.FC<AdminStatsProps> = ({ tasks, teamMembers }) => {
         </p>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-4">
           {teamMembers.map(person => {
-            const count = tasks.filter(t => t.responsible === person && t.status !== Status.DONE).length;
+            const normalized = (person || '').toLowerCase().trim();
+            const count = tasks.filter(t => (t.responsible || '').toLowerCase().trim() === normalized && t.status !== Status.DONE).length;
             const percentage = total > 0 ? (count / total) * 100 : 0;
             return (
               <div key={person} className="flex items-center gap-4">
-                <span className="text-[10px] md:text-xs font-bold text-slate-300 w-20 md:w-28 truncate shrink-0">{person}</span>
+                <span className="text-[10px] md:text-xs font-bold text-slate-300 w-20 md:w-28 truncate shrink-0">{memberDirectory?.[normalized] || person}</span>
                 <div className="flex-1 h-2 bg-slate-950 rounded-full overflow-hidden border border-slate-800">
                   <div 
                     className="h-full bg-blue-600 transition-all duration-700 shadow-[0_0_8px_rgba(37,99,235,0.4)]" 

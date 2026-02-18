@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { User, Role, Task, Status, TeamMember, WorkSchedule, FixedDemand, Feedback, PhotoAuditLog } from './types.ts';
+import { User, Role, Task, Status, TeamMember, WorkSchedule, FixedDemand, Feedback, PhotoAuditLog, CompanyMemberRecord } from './types.ts';
 import { User as UserV2, Role as RoleV2, Permission, Task as TaskV2, TaskStatus, TaskFlowType } from './types-v2.ts';
 import { db, isFirebaseConfigured } from './firebase.ts';
 import { collection, query, where, onSnapshot, doc, updateDoc, addDoc, deleteDoc, setDoc } from 'firebase/firestore';
@@ -26,6 +26,8 @@ import DevSupportManagement from './components/DevSupportManagement.tsx';
 import Organograma from './components/Organograma.tsx';
 import AdminUserManagement from './components/AdminUserManagement.tsx';
 import { initializePushNotifications } from './services/PushNotificationService.ts';
+import { buildChildrenMap, getDescendants } from './services/hierarchy.ts';
+import HierarchyManagement from './components/HierarchyManagement.tsx';
 
 const App: React.FC = () => {
   // V1 State (mantém compatibilidade)
@@ -35,6 +37,7 @@ const App: React.FC = () => {
   const [schedules, setSchedules] = useState<WorkSchedule[]>([]);
   const [fixedDemands, setFixedDemands] = useState<FixedDemand[]>([]);
   const [feedbacks, setFeedbacks] = useState<Feedback[]>([]);
+  const [companyMembers, setCompanyMembers] = useState<CompanyMemberRecord[]>([]);
   
   // V2 State (novo)
   const [userPermissions, setUserPermissions] = useState<Permission[]>([]);
@@ -51,45 +54,74 @@ const App: React.FC = () => {
 
   // Sincronização em Tempo Real com Firestore
   useEffect(() => {
-    if (!isFirebaseConfigured || !user || !user.storeId) return;
+    if (!isFirebaseConfigured || !user) return;
 
     const storeId = user.storeId;
+    const companyId = user.companyId;
 
     try {
-      // Listener de Tarefas com tratamento de erro
-      const qTasks = query(collection(db, "tasks"), where("storeId", "==", storeId));
-      const unsubTasks = onSnapshot(qTasks, 
-        (snapshot) => {
-          const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Task));
-          setTasks(data.sort((a, b) => b.createdAt - a.createdAt));
-        },
-        (error) => console.error("Erro listener tarefas:", error)
-      );
+      // Listener de Tarefas: por empresa (novo) ou por unidade (legado)
+      const qTasks = companyId
+        ? query(collection(db, "tasks"), where("companyId", "==", companyId))
+        : (storeId ? query(collection(db, "tasks"), where("storeId", "==", storeId)) : null);
 
-      // Listener de Feedbacks com tratamento de erro
-      const qFeedbacks = query(collection(db, "feedbacks"), where("storeId", "==", storeId));
-      const unsubFeedbacks = onSnapshot(qFeedbacks, 
-        (snapshot) => {
-          const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Feedback));
-          setFeedbacks(data.sort((a, b) => b.createdAt - a.createdAt));
-        },
-        (error) => console.error("Erro listener feedbacks:", error)
-      );
+      const unsubTasks = qTasks
+        ? onSnapshot(
+            qTasks,
+            (snapshot) => {
+              const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Task));
+              setTasks(data.sort((a, b) => b.createdAt - a.createdAt));
+            },
+            (error) => console.error("Erro listener tarefas:", error)
+          )
+        : () => {};
 
-      // Listener de Configurações da Loja
-      const unsubConfig = onSnapshot(doc(db, "stores_config", storeId), (docSnap) => {
-        if (docSnap.exists()) {
-          const data = docSnap.data();
-          setTeamMembers(data.teamMembers || []);
-          setSchedules(data.schedules || []);
-          setFixedDemands(data.fixedDemands || []);
-        }
-      });
+      // Listener de Feedbacks (mantido por unidade)
+      const unsubFeedbacks = storeId
+        ? onSnapshot(
+            query(collection(db, "feedbacks"), where("storeId", "==", storeId)),
+            (snapshot) => {
+              const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Feedback));
+              setFeedbacks(data.sort((a, b) => b.createdAt - a.createdAt));
+            },
+            (error) => console.error("Erro listener feedbacks:", error)
+          )
+        : () => {};
+
+      // Listener de Configurações da Loja (agora não carrega logins)
+      const unsubConfig = storeId
+        ? onSnapshot(doc(db, "stores_config", storeId), (docSnap) => {
+            if (docSnap.exists()) {
+              const data = docSnap.data();
+              setSchedules(data.schedules || []);
+              setFixedDemands(data.fixedDemands || []);
+            }
+          })
+        : () => {};
+
+      // Listener de membros da empresa (hierarquia + logins)
+      const unsubMembers = companyId
+        ? onSnapshot(
+            query(collection(db, "company_members"), where("companyId", "==", companyId)),
+            (snapshot) => {
+              const members = snapshot.docs.map(d => ({ ...(d.data() as any), id: d.id } as CompanyMemberRecord));
+              const activeMembers = members.filter(m => m.isActive !== false);
+              setCompanyMembers(members);
+
+              if (storeId) {
+                const local = activeMembers.filter(m => (m.storeId || '') === storeId);
+                setTeamMembers(local.map(m => ({ name: m.name, username: m.username, storeId: m.storeId })));
+              }
+            },
+            (error) => console.error('Erro listener company_members:', error)
+          )
+        : () => {};
 
       return () => {
         unsubTasks();
         unsubFeedbacks();
         unsubConfig();
+        unsubMembers();
       };
     } catch (error) {
       console.error("Erro crítico de sincronização Firestore:", error);
@@ -263,6 +295,41 @@ const App: React.FC = () => {
 
   if (!user) return <Login onLogin={handleLogin} />;
 
+  const normalizedUsername = (user.username || '').toLowerCase().trim();
+  const childrenMap = buildChildrenMap(companyMembers);
+  const descendantUsernames = user.companyId ? getDescendants(childrenMap, normalizedUsername) : new Set<string>();
+  const memberByUsername = new Map<string, CompanyMemberRecord>(
+    companyMembers.map(m => [m.username.toLowerCase().trim(), m])
+  );
+  const memberDirectory: Record<string, string> = Object.fromEntries(
+    companyMembers.map(m => [m.username.toLowerCase().trim(), m.name] as const)
+  );
+  const teamMemberUsernames = teamMembers.map(m => (m.username || '').toLowerCase().trim()).filter(Boolean);
+
+  const canDelegate = [Role.COMPANY, Role.MANAGER, Role.SUPERVISOR, Role.ADMIN].includes(user.role);
+  const canManageTeam = [Role.MANAGER, Role.SUPERVISOR, Role.ADMIN].includes(user.role);
+
+  const visibleTasks = tasks.filter(t => {
+    const responsible = (t.responsible || '').toLowerCase().trim();
+    const createdBy = (t.createdBy || '').toLowerCase().trim();
+    if (responsible === normalizedUsername) return true;
+    if (createdBy === normalizedUsername) return true;
+    if (responsible && descendantUsernames.has(responsible)) return true;
+    return false;
+  });
+
+  const assignees = Array.from(descendantUsernames)
+    .filter(u => u && u !== normalizedUsername)
+    .map(u => ({ username: u, name: memberByUsername.get(u)?.name || u }));
+
+  const statsUsernames = Array.from(
+    new Set(
+      visibleTasks
+        .map(t => (t.responsible || '').toLowerCase().trim())
+        .filter(Boolean)
+    )
+  ).sort();
+
   const canCreateCompanies = user.role === Role.DEV || (user.role === Role.SUPPORT && user.canCreateCompany === true);
 
   return (
@@ -275,7 +342,17 @@ const App: React.FC = () => {
             </div>
             <div className="hidden sm:block">
               <h1 className="text-[9px] font-black text-blue-500 uppercase tracking-widest leading-none mb-1 flex items-center gap-2">
-              {user.role === Role.DEV ? 'PAINEL MASTER' : user.role === Role.SUPPORT ? 'PAINEL DE SUPORTE' : `UNIDADE ${user.storeId}`}
+              {user.role === Role.DEV
+                ? 'PAINEL MASTER'
+                : user.role === Role.SUPPORT
+                  ? 'PAINEL DE SUPORTE'
+                  : user.role === Role.COMPANY
+                    ? `PAINEL EMPRESA ${user.companyId}`
+                    : user.role === Role.MANAGER || user.role === Role.ADMIN
+                      ? 'PAINEL GESTÃO'
+                      : user.role === Role.SUPERVISOR
+                        ? 'PAINEL SUPERVISÃO'
+                        : 'PAINEL EXECUÇÃO'}
                 <button onClick={handleForceRefresh} title="Limpar Cache/Atualizar" className="text-slate-700 hover:text-blue-400 transition-colors">
                   <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
                 </button>
@@ -313,11 +390,6 @@ const App: React.FC = () => {
             {activeTab === 'tasks' && <SuperAdminDashboard mode={user.role} companyId={user.companyId} />}
             {activeTab === 'dev-support' && <DevSupportManagement devId={user.username || user.name} />}
           </>
-        ) : user.role === Role.COMPANY ? (
-          <SuperAdminDashboard 
-            mode={Role.COMPANY} 
-            companyId={user.companyId} 
-          />
         ) : user.role === Role.SUPPORT ? (
           <>
             {canCreateCompanies && (
@@ -341,7 +413,16 @@ const App: React.FC = () => {
           </>
         ) : (
           <>
-            {activeTab === 'tasks' && <AdminStats tasks={tasks} teamMembers={teamMembers.map(m => m.name)} />}
+            {activeTab === 'tasks' && (
+              <>
+                {user.role === Role.COMPANY && (
+                  <div className="space-y-6">
+                    <SuperAdminDashboard mode={Role.COMPANY} companyId={user.companyId} currentUsername={user.username} />
+                  </div>
+                )}
+                <AdminStats tasks={visibleTasks} teamMembers={statsUsernames} memberDirectory={memberDirectory} />
+              </>
+            )}
             
             <div className="flex md:hidden bg-slate-900 p-1 rounded-2xl border border-slate-800 overflow-x-auto gap-1">
                {user.role !== Role.SUPPORT && <button onClick={() => setActiveTab('tasks')} className={`flex-1 py-3 px-4 whitespace-nowrap text-[10px] font-black uppercase rounded-xl transition-all ${activeTab === 'tasks' ? 'bg-blue-600 text-white' : 'text-slate-500'}`}>Operação</button>}
@@ -368,8 +449,8 @@ const App: React.FC = () => {
                         ✨ Nova Tarefa V2
                       </button>
                     )}
-                    {/* V1 Modal (compatibilidade) */}
-                    {user.role === Role.ADMIN && (
+                    {/* V1 Modal (hierarquia) */}
+                    {canDelegate && (
                       <button 
                         onClick={() => setIsModalOpen(true)} 
                         className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 md:px-6 md:py-3 rounded-xl md:rounded-2xl font-black text-[9px] md:text-[10px] uppercase shadow-xl transition-all active:scale-95"
@@ -380,14 +461,15 @@ const App: React.FC = () => {
                   </div>
                 </div>
                 <KanbanBoard 
-                  tasks={tasks} 
+                  tasks={visibleTasks} 
                   onMove={moveTask} 
                   onToggleCheck={toggleChecklistItem} 
                   onDelete={async (id) => {
                     await deleteDoc(doc(db, "tasks", id));
                   }} 
-                  isAdmin={user.role === Role.ADMIN}
-                  teamMembers={teamMembers.map(m => m.name)}
+                  isAdmin={canDelegate}
+                  teamMembers={teamMemberUsernames}
+                  memberDirectory={memberDirectory}
                 />
               </div>
             )}
@@ -426,11 +508,30 @@ const App: React.FC = () => {
             )}
 
             {activeTab === 'team' && (
-              <TeamBoard isAdmin={user.role === Role.ADMIN} onEdit={() => setIsTeamModalOpen(true)} teamMembers={teamMembers} schedules={schedules} fixedDemands={fixedDemands} />
+              <div className="space-y-6">
+                {user.companyId && canDelegate && (
+                  <HierarchyManagement
+                    companyId={user.companyId}
+                    currentUsername={user.username}
+                    currentRole={user.role}
+                    members={companyMembers}
+                  />
+                )}
+
+                {user.storeId && (
+                  <TeamBoard
+                    isAdmin={canManageTeam}
+                    onEdit={() => setIsTeamModalOpen(true)}
+                    teamMembers={teamMembers}
+                    schedules={schedules}
+                    fixedDemands={fixedDemands}
+                  />
+                )}
+              </div>
             )}
 
             {activeTab === 'reports' && (
-              <ReportsSection tasks={tasks} teamMembers={teamMembers} currentUser={user} />
+              <ReportsSection tasks={visibleTasks} teamMembers={teamMembers} currentUser={user} />
             )}
 
             {activeTab === 'feedback' && (
@@ -459,8 +560,31 @@ const App: React.FC = () => {
         )}
       </main>
 
-      {isModalOpen && <NewTaskModal teamMembers={teamMembers.map(m => m.name)} onClose={() => setIsModalOpen(false)} onSubmit={async (t) => {
-        await addDoc(collection(db, "tasks"), { ...t, status: Status.TODO, createdAt: Date.now(), storeId: user.storeId! });
+      {isModalOpen && <NewTaskModal assignees={assignees} onClose={() => setIsModalOpen(false)} onSubmit={async (t) => {
+        const responsibleUsername = (t.responsible || '').toLowerCase().trim();
+        const responsibleMember = memberByUsername.get(responsibleUsername);
+        const resolvedStoreId = responsibleMember?.storeId || user.storeId;
+
+        if (!responsibleUsername) {
+          alert('Selecione um responsável.');
+          return;
+        }
+
+        if (!resolvedStoreId) {
+          alert('Responsável sem unidade definida. Defina a unidade do usuário.');
+          return;
+        }
+
+        await addDoc(collection(db, "tasks"), {
+          ...t,
+          responsible: responsibleUsername,
+          status: Status.TODO,
+          createdAt: Date.now(),
+          storeId: resolvedStoreId,
+          companyId: user.companyId,
+          createdBy: normalizedUsername,
+          assignedBy: normalizedUsername
+        });
         setIsModalOpen(false);
       }} />}
 
@@ -492,8 +616,47 @@ const App: React.FC = () => {
       )}
       
       {isTeamModalOpen && <TeamSettingsModal teamMembers={teamMembers} schedules={schedules} fixedDemands={fixedDemands} storeId={user.storeId!} onClose={() => setIsTeamModalOpen(false)} onSave={async (s, d, m) => {
-        const normalizedMembers = m.map(member => ({ ...member, storeId: member.storeId || user.storeId! }));
-        await setDoc(doc(db, "stores_config", user.storeId!), { schedules: s, fixedDemands: d, teamMembers: normalizedMembers });
+        const storeId = user.storeId!;
+        const companyId = user.companyId;
+        const normalizedMembers = m.map(member => ({ ...member, storeId: member.storeId || storeId }));
+
+        await setDoc(doc(db, "stores_config", storeId), { schedules: s, fixedDemands: d, teamMembers: normalizedMembers }, { merge: true });
+
+        if (companyId) {
+          const nextUsernames = new Set(normalizedMembers.map(x => (x.username || '').toLowerCase().trim()));
+          const prevUsernames = new Set(teamMembers.map(x => (x.username || '').toLowerCase().trim()));
+
+          // Upsert membros atuais como colaboradores ativos
+          for (const member of normalizedMembers) {
+            const uname = (member.username || '').toLowerCase().trim();
+            if (!uname) continue;
+
+            await setDoc(doc(db, "company_members", `${companyId}__${uname}`), {
+              companyId,
+              username: uname,
+              name: member.name,
+              role: Role.USER,
+              leaderUsername: normalizedUsername,
+              storeId,
+              isActive: true,
+              password: member.password || '',
+              passwordSalt: member.passwordSalt || '',
+              createdAt: Date.now()
+            }, { merge: true });
+          }
+
+          // Desativar removidos
+          for (const prev of prevUsernames) {
+            if (!prev) continue;
+            if (nextUsernames.has(prev)) continue;
+            await setDoc(doc(db, "company_members", `${companyId}__${prev}`), {
+              companyId,
+              username: prev,
+              isActive: false
+            }, { merge: true });
+          }
+        }
+
         setIsTeamModalOpen(false);
       }} />}
 

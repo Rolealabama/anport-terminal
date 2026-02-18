@@ -50,13 +50,15 @@ describe('Login', () => {
   it('logs in as company admin', async () => {
     const onLogin = vi.fn();
 
-    vi.mocked(getDocs).mockResolvedValueOnce({
-      empty: false,
-      docs: [{ data: () => ({ id: 'C1', name: 'Comp', adminPassword: 'hashed', passwordSalt: 'salt', isSuspended: false }) }]
-    } as any);
+    vi.mocked(getDoc)
+      // companies/C1
+      .mockResolvedValueOnce({ exists: () => true, data: () => ({ id: 'C1', name: 'Comp', isSuspended: false }) } as any)
+      // company_members/C1__adm
+      .mockResolvedValueOnce({ exists: () => true, id: 'C1__adm', data: () => ({ companyId: 'C1', username: 'adm', name: 'Comp', role: Role.COMPANY, password: 'hashed', passwordSalt: 'salt', isActive: true }) } as any);
 
     render(<Login onLogin={onLogin} />);
 
+    fireEvent.change(screen.getByPlaceholderText('EMPRESA (EX: ACME01)'), { target: { value: 'C1' } });
     fireEvent.change(screen.getByPlaceholderText('USUÁRIO'), { target: { value: 'adm' } });
     fireEvent.change(screen.getByPlaceholderText('SENHA'), { target: { value: 'secret' } });
     fireEvent.click(screen.getByRole('button', { name: /Acessar Terminal/i }));
@@ -67,12 +69,17 @@ describe('Login', () => {
   it('blocks store admin when store is blocked', async () => {
     const onLogin = vi.fn();
 
-    vi.mocked(getDocs)
-      .mockResolvedValueOnce({ empty: true, docs: [] } as any)
-      .mockResolvedValueOnce({ empty: false, docs: [{ id: 'S1', data: () => ({ adminPassword: 'hashed', passwordSalt: 'salt', adminName: 'Gerente', companyId: 'C1', isBlocked: true }) }] } as any);
+    vi.mocked(getDoc)
+      // companies/C1
+      .mockResolvedValueOnce({ exists: () => true, data: () => ({ id: 'C1', name: 'Comp', isSuspended: false }) } as any)
+      // company_members/C1__store
+      .mockResolvedValueOnce({ exists: () => true, id: 'C1__store', data: () => ({ companyId: 'C1', username: 'store', name: 'Gerente', role: Role.MANAGER, storeId: 'S1', password: 'hashed', passwordSalt: 'salt', isActive: true }) } as any)
+      // stores/S1
+      .mockResolvedValueOnce({ exists: () => true, data: () => ({ companyId: 'C1', isBlocked: true }) } as any);
 
     render(<Login onLogin={onLogin} />);
 
+    fireEvent.change(screen.getByPlaceholderText('EMPRESA (EX: ACME01)'), { target: { value: 'C1' } });
     fireEvent.change(screen.getByPlaceholderText('USUÁRIO'), { target: { value: 'store' } });
     fireEvent.change(screen.getByPlaceholderText('SENHA'), { target: { value: 'secret' } });
     fireEvent.click(screen.getByRole('button', { name: /Acessar Terminal/i }));
@@ -84,20 +91,17 @@ describe('Login', () => {
   it('logs in collaborator by username', async () => {
     const onLogin = vi.fn();
 
-    vi.mocked(getDocs)
-      .mockResolvedValueOnce({ empty: true, docs: [] } as any)
-      .mockResolvedValueOnce({ empty: true, docs: [] } as any)
-      .mockResolvedValueOnce({
-        docs: [{ id: 'S1', data: () => ({ teamMembers: [{ username: 'col', password: 'hashed', passwordSalt: 'salt', name: 'Colab' }] }) }]
-      } as any);
-
-    vi.mocked(getDoc).mockResolvedValueOnce({
-      exists: () => true,
-      data: () => ({ companyId: 'C1', isBlocked: false })
-    } as any);
+    vi.mocked(getDoc)
+      // companies/C1
+      .mockResolvedValueOnce({ exists: () => true, data: () => ({ id: 'C1', name: 'Comp', isSuspended: false }) } as any)
+      // company_members/C1__col
+      .mockResolvedValueOnce({ exists: () => true, id: 'C1__col', data: () => ({ companyId: 'C1', username: 'col', name: 'Colab', role: Role.USER, storeId: 'S1', password: 'hashed', passwordSalt: 'salt', isActive: true }) } as any)
+      // stores/S1
+      .mockResolvedValueOnce({ exists: () => true, data: () => ({ companyId: 'C1', isBlocked: false }) } as any);
 
     render(<Login onLogin={onLogin} />);
 
+    fireEvent.change(screen.getByPlaceholderText('EMPRESA (EX: ACME01)'), { target: { value: 'C1' } });
     fireEvent.change(screen.getByPlaceholderText('USUÁRIO'), { target: { value: 'col' } });
     fireEvent.change(screen.getByPlaceholderText('SENHA'), { target: { value: 'secret' } });
     fireEvent.click(screen.getByRole('button', { name: /Acessar Terminal/i }));
@@ -108,13 +112,13 @@ describe('Login', () => {
   it('blocks company admin when suspended', async () => {
     const onLogin = vi.fn();
 
-    vi.mocked(getDocs).mockResolvedValueOnce({
-      empty: false,
-      docs: [{ data: () => ({ id: 'C1', name: 'Comp', adminPassword: 'hashed', passwordSalt: 'salt', isSuspended: true }) }]
-    } as any);
+    vi.mocked(getDoc)
+      // companies/C1
+      .mockResolvedValueOnce({ exists: () => true, data: () => ({ id: 'C1', name: 'Comp', isSuspended: true }) } as any);
 
     render(<Login onLogin={onLogin} />);
 
+    fireEvent.change(screen.getByPlaceholderText('EMPRESA (EX: ACME01)'), { target: { value: 'C1' } });
     fireEvent.change(screen.getByPlaceholderText('USUÁRIO'), { target: { value: 'adm' } });
     fireEvent.change(screen.getByPlaceholderText('SENHA'), { target: { value: 'secret' } });
     fireEvent.click(screen.getByRole('button', { name: /Acessar Terminal/i }));
@@ -126,36 +130,38 @@ describe('Login', () => {
   it('logs in store admin', async () => {
     const onLogin = vi.fn();
 
-    vi.mocked(getDocs)
-      .mockResolvedValueOnce({ empty: true, docs: [] } as any)
-      .mockResolvedValueOnce({
-        empty: false,
-        docs: [{ id: 'S1', data: () => ({ adminPassword: 'hashed', passwordSalt: 'salt', adminName: 'Gerente', companyId: 'C1', isBlocked: false }) }]
-      } as any);
+    vi.mocked(getDoc)
+      // companies/C1
+      .mockResolvedValueOnce({ exists: () => true, data: () => ({ id: 'C1', name: 'Comp', isSuspended: false }) } as any)
+      // company_members/C1__store
+      .mockResolvedValueOnce({ exists: () => true, id: 'C1__store', data: () => ({ companyId: 'C1', username: 'store', name: 'Gerente', role: Role.MANAGER, storeId: 'S1', password: 'hashed', passwordSalt: 'salt', isActive: true }) } as any)
+      // stores/S1
+      .mockResolvedValueOnce({ exists: () => true, data: () => ({ companyId: 'C1', isBlocked: false }) } as any);
 
     render(<Login onLogin={onLogin} />);
 
+    fireEvent.change(screen.getByPlaceholderText('EMPRESA (EX: ACME01)'), { target: { value: 'C1' } });
     fireEvent.change(screen.getByPlaceholderText('USUÁRIO'), { target: { value: 'store' } });
     fireEvent.change(screen.getByPlaceholderText('SENHA'), { target: { value: 'secret' } });
     fireEvent.click(screen.getByRole('button', { name: /Acessar Terminal/i }));
 
-    await waitFor(() => expect(onLogin).toHaveBeenCalledWith(expect.objectContaining({ role: Role.ADMIN })));
+    await waitFor(() => expect(onLogin).toHaveBeenCalledWith(expect.objectContaining({ role: Role.MANAGER })));
   });
 
   it('shows error when store is not found for collaborator', async () => {
     const onLogin = vi.fn();
 
-    vi.mocked(getDocs)
-      .mockResolvedValueOnce({ empty: true, docs: [] } as any)
-      .mockResolvedValueOnce({ empty: true, docs: [] } as any)
-      .mockResolvedValueOnce({
-        docs: [{ id: 'S1', data: () => ({ teamMembers: [{ username: 'col', password: 'hashed', passwordSalt: 'salt', name: 'Colab' }] }) }]
-      } as any);
-
-    vi.mocked(getDoc).mockResolvedValueOnce({ exists: () => false } as any);
+    vi.mocked(getDoc)
+      // companies/C1
+      .mockResolvedValueOnce({ exists: () => true, data: () => ({ id: 'C1', name: 'Comp', isSuspended: false }) } as any)
+      // company_members/C1__col
+      .mockResolvedValueOnce({ exists: () => true, id: 'C1__col', data: () => ({ companyId: 'C1', username: 'col', name: 'Colab', role: Role.USER, storeId: 'S1', password: 'hashed', passwordSalt: 'salt', isActive: true }) } as any)
+      // stores/S1
+      .mockResolvedValueOnce({ exists: () => false } as any);
 
     render(<Login onLogin={onLogin} />);
 
+    fireEvent.change(screen.getByPlaceholderText('EMPRESA (EX: ACME01)'), { target: { value: 'C1' } });
     fireEvent.change(screen.getByPlaceholderText('USUÁRIO'), { target: { value: 'col' } });
     fireEvent.change(screen.getByPlaceholderText('SENHA'), { target: { value: 'secret' } });
     fireEvent.click(screen.getByRole('button', { name: /Acessar Terminal/i }));
@@ -168,10 +174,11 @@ describe('Login', () => {
     const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
     try {
-      vi.mocked(getDocs).mockRejectedValueOnce(new Error('fail'));
+      vi.mocked(getDoc).mockRejectedValueOnce(new Error('fail'));
 
       render(<Login onLogin={onLogin} />);
 
+      fireEvent.change(screen.getByPlaceholderText('EMPRESA (EX: ACME01)'), { target: { value: 'C1' } });
       fireEvent.change(screen.getByPlaceholderText('USUÁRIO'), { target: { value: 'x' } });
       fireEvent.change(screen.getByPlaceholderText('SENHA'), { target: { value: 'y' } });
       fireEvent.click(screen.getByRole('button', { name: /Acessar Terminal/i }));
@@ -185,13 +192,19 @@ describe('Login', () => {
   it('shows invalid credentials message', async () => {
     const onLogin = vi.fn();
 
-    vi.mocked(getDocs)
-      .mockResolvedValueOnce({ empty: true, docs: [] } as any)
-      .mockResolvedValueOnce({ empty: true, docs: [] } as any)
-      .mockResolvedValueOnce({ docs: [] } as any);
+    vi.mocked(getDoc)
+      // companies/C1
+      .mockResolvedValueOnce({ exists: () => true, data: () => ({ id: 'C1', name: 'Comp', isSuspended: false }) } as any)
+      // company_members/C1__x (não encontrado)
+      .mockResolvedValueOnce({ exists: () => false } as any)
+      // legacy companies/C1 fallback
+      .mockResolvedValueOnce({ exists: () => true, data: () => ({ id: 'C1', name: 'Comp', adminUsername: 'adm', adminPassword: 'hashed', passwordSalt: 'salt', isSuspended: false }) } as any);
+
+    vi.mocked(getDocs).mockResolvedValue({ empty: true, docs: [] } as any);
 
     render(<Login onLogin={onLogin} />);
 
+    fireEvent.change(screen.getByPlaceholderText('EMPRESA (EX: ACME01)'), { target: { value: 'C1' } });
     fireEvent.change(screen.getByPlaceholderText('USUÁRIO'), { target: { value: 'x' } });
     fireEvent.change(screen.getByPlaceholderText('SENHA'), { target: { value: 'y' } });
     fireEvent.click(screen.getByRole('button', { name: /Acessar Terminal/i }));

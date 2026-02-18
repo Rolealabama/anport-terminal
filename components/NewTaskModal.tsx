@@ -3,17 +3,17 @@ import React, { useState } from 'react';
 import { Priority, Task, ChecklistItem } from '../types.ts';
 
 interface NewTaskModalProps {
-  teamMembers: string[];
+  assignees: Array<{ username: string; name: string }>;
   onClose: () => void;
   onSubmit: (task: Omit<Task, 'id' | 'status' | 'createdAt' | 'storeId'>) => void;
 }
 
-const NewTaskModal: React.FC<NewTaskModalProps> = ({ teamMembers, onClose, onSubmit }) => {
+const NewTaskModal: React.FC<NewTaskModalProps> = ({ assignees = [], onClose, onSubmit }) => {
   const today = new Date().toISOString().split('T')[0];
   
   const [formData, setFormData] = useState({
     title: '',
-    responsible: teamMembers[0] || '',
+    responsible: assignees[0]?.username || '',
     priority: Priority.MEDIA,
     deadline: today, // Começa com hoje, não deixa vazio
     checklist: [] as ChecklistItem[]
@@ -83,8 +83,8 @@ const NewTaskModal: React.FC<NewTaskModalProps> = ({ teamMembers, onClose, onSub
                 onChange={e => setFormData(prev => ({ ...prev, responsible: e.target.value }))}
               >
                 <option value="">Membro...</option>
-                {teamMembers.map(name => (
-                  <option key={name} value={name}>{name}</option>
+                {assignees.map(a => (
+                  <option key={a.username} value={a.username}>{a.name} (@{a.username})</option>
                 ))}
               </select>
             </div>

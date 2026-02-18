@@ -9,9 +9,10 @@ interface KanbanBoardProps {
   onDelete: (id: string) => void;
   isAdmin: boolean;
   teamMembers?: string[];
+  memberDirectory?: Record<string, string>;
 }
 
-const KanbanBoard: React.FC<KanbanBoardProps> = ({ tasks, onMove, onToggleCheck, onDelete, isAdmin, teamMembers = [] }) => {
+const KanbanBoard: React.FC<KanbanBoardProps> = ({ tasks, onMove, onToggleCheck, onDelete, isAdmin, teamMembers = [], memberDirectory }) => {
   const columns = [Status.TODO, Status.DOING, Status.DONE];
 
   return (
@@ -34,6 +35,7 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ tasks, onMove, onToggleCheck,
                 key={task.id} 
                 task={task} 
                 teamMembers={teamMembers}
+                memberDirectory={memberDirectory}
                 onMove={onMove}
                 onDelete={isAdmin ? onDelete : undefined}
                 // Permitimos toggle de checklist se estiver em andamento

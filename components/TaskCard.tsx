@@ -12,9 +12,10 @@ interface TaskCardProps {
   onReassign?: (id: string, person: string) => void;
   onToggleCheck?: (taskId: string, itemId: string) => void;
   currentUser?: any;  // Para rastreamento de auditoria
+  memberDirectory?: Record<string, string>;
 }
 
-const TaskCard: React.FC<TaskCardProps> = ({ task, teamMembers, onMove, onDelete, onReassign, onToggleCheck, currentUser }) => {
+const TaskCard: React.FC<TaskCardProps> = ({ task, teamMembers, onMove, onDelete, onReassign, onToggleCheck, currentUser, memberDirectory }) => {
   const [showProof, setShowProof] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [auditedPhotos, setAuditedPhotos] = useState<Set<string>>(new Set());
@@ -35,6 +36,8 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, teamMembers, onMove, onDelete
   };
 
   const isOverdue = task.status !== Status.DONE && task.deadline < new Date().toISOString().split('T')[0];
+
+  const responsibleLabel = memberDirectory?.[(task.responsible || '').toLowerCase().trim()] || task.responsible;
 
   // Registra visualização de prova na auditoria
   const handlePhotoClick = async (data: string, photoName: string) => {
@@ -106,10 +109,14 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, teamMembers, onMove, onDelete
                 onChange={(e) => onReassign(task.id, e.target.value)}
                 className="font-black text-blue-500 bg-transparent outline-none cursor-pointer"
               >
-                {teamMembers.map(r => <option key={r} value={r}>{r}</option>)}
+                {teamMembers.map(r => (
+                  <option key={r} value={r}>
+                    {(memberDirectory?.[r.toLowerCase().trim()] || r)}
+                  </option>
+                ))}
               </select>
             ) : (
-              <strong className="text-slate-300">{task.responsible}</strong>
+              <strong className="text-slate-300">{responsibleLabel}</strong>
             )}
           </div>
           <div className="flex items-center justify-between text-[10px]">

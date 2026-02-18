@@ -18,7 +18,7 @@ describe('NewTaskModal', () => {
 
     render(
       <NewTaskModal
-        teamMembers={['Ana']}
+        assignees={[{ username: 'ana', name: 'Ana' }]}
         onClose={() => {}}
         onSubmit={onSubmit}
       />
@@ -45,7 +45,7 @@ describe('NewTaskModal', () => {
 
     render(
       <NewTaskModal
-        teamMembers={['Ana']}
+        assignees={[{ username: 'ana', name: 'Ana' }]}
         onClose={() => {}}
         onSubmit={onSubmit}
       />
@@ -56,7 +56,7 @@ describe('NewTaskModal', () => {
     });
 
     const selects = screen.getAllByRole('combobox');
-    fireEvent.change(selects[0], { target: { value: 'Ana' } });
+    fireEvent.change(selects[0], { target: { value: 'ana' } });
 
     const dateInput = screen.getByDisplayValue('2026-02-15');
     fireEvent.change(dateInput, { target: { value: '2020-01-01' } });

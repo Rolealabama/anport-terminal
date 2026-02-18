@@ -16,7 +16,9 @@ export enum Status {
 export enum Role {
   DEV = 'superadmin',       // Dono do Sistema
   COMPANY = 'company',      // Painel da Empresa
-  ADMIN = 'admin',         // Gerente da Unidade
+  ADMIN = 'admin',         // (LEGACY) Gerente da Unidade
+  MANAGER = 'manager',     // Gestor
+  SUPERVISOR = 'supervisor', // Supervisor
   SUPPORT = 'support',     // Suporte (recebe chamados)
   USER = 'collaborator'    // Colaborador
 }
@@ -28,6 +30,21 @@ export interface User {
   companyId?: string;
   storeId?: string;
   canCreateCompany?: boolean;  // Para suporte que pode criar empresas
+}
+
+// Registro de login + vínculo com empresa (multi-tenant)
+export interface CompanyMemberRecord {
+  id: string; // doc id (ex: EMPRESA__username)
+  companyId: string;
+  username: string;
+  name: string;
+  role: Role;
+  leaderUsername?: string | null;
+  storeId?: string;
+  isActive?: boolean;
+  password: string;
+  passwordSalt: string;
+  createdAt: number;
 }
 
 export interface Company {
@@ -89,9 +106,12 @@ export interface AppNotification {
 
 export interface Task {
   id: string;
+  companyId?: string;
   storeId: string;
   title: string;
-  responsible: string;
+  responsible: string; // username do responsável (mantido por compatibilidade)
+  createdBy?: string;  // username de quem criou
+  assignedBy?: string; // username de quem delegou (normalmente igual createdBy)
   priority: Priority;
   deadline: string;
   status: Status;
@@ -105,7 +125,7 @@ export interface Task {
 export interface TeamMember {
   name: string;
   username: string;
-  password: string;
+  password?: string;
   passwordSalt?: string;
   storeId?: string;
   phone?: string;

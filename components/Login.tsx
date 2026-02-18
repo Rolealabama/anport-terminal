@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { User, Role, Company, Store } from '../types.ts';
+import { User, Role, Company, Store, CompanyMemberRecord } from '../types.ts';
 import { hashPassword } from '../utils.ts';
 import { db, isFirebaseConfigured } from '../firebase.ts';
 import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
@@ -10,6 +10,7 @@ interface LoginProps {
 }
 
 const Login: React.FC<LoginProps> = ({ onLogin }) => {
+  const [companyId, setCompanyId] = useState('');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -34,16 +35,19 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
     };
 
     try {
+      const normalizedCompanyId = companyId.toUpperCase().trim();
       const normalizedUser = username.toLowerCase().trim();
 
-      const findCollaboratorByUsername = async () => {
-        const configsSnap = await getDocs(collection(db, "stores_config"));
-        for (const cfg of configsSnap.docs) {
+      const findCollaboratorByUsernameInCompany = async (companyIdToSearch: string) => {
+        const storesSnap = await getDocs(query(collection(db, "stores"), where("companyId", "==", companyIdToSearch)));
+        const storeIds = storesSnap.docs.map(d => d.id);
+
+        for (const storeId of storeIds) {
+          const cfg = await getDoc(doc(db, "stores_config", storeId));
+          if (!cfg.exists()) continue;
           const data = cfg.data();
-          const member = data.teamMembers?.find((m: any) => m.username === normalizedUser);
-          if (member) {
-            return { storeId: cfg.id, member };
-          }
+          const member = data.teamMembers?.find((m: any) => (m.username || '').toLowerCase().trim() === normalizedUser);
+          if (member) return { storeId, member };
         }
         return null;
       };
@@ -57,84 +61,139 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
         return;
       }
 
-      // 2. BUSCA EMPRESA (COMPANY ADMIN) NO FIRESTORE
-      const qCompany = query(collection(db, "companies"), where("adminUsername", "==", normalizedUser));
-      const companySnap = await getDocs(qCompany);
-      
-      if (!companySnap.empty) {
-        const companyData = companySnap.docs[0].data() as Company;
-        const salt = companyData.passwordSalt || '';
-        const inputHash = await safeHashPassword(password, salt);
-        
-        if (companyData.adminPassword === password || companyData.adminPassword === inputHash) {
-          if (companyData.isSuspended) {
-            setError('Acesso suspenso por pendências financeiras.');
-            setLoading(false);
+      // 2. LOGIN MODERNO (EMPRESA + USERNAME) VIA company_members
+      if (normalizedCompanyId) {
+        const companySnap = await getDoc(doc(db, "companies", normalizedCompanyId));
+        if (!companySnap.exists()) {
+          setError('Empresa não encontrada.');
+          return;
+        }
+        const companyData = companySnap.data() as Company;
+        if (companyData.isSuspended) {
+          setError('Acesso suspenso por pendências financeiras.');
+          return;
+        }
+
+        const memberId = `${normalizedCompanyId}__${normalizedUser}`;
+        const memberSnap = await getDoc(doc(db, "company_members", memberId));
+        if (memberSnap.exists()) {
+          const member = { ...(memberSnap.data() as any), id: memberSnap.id } as CompanyMemberRecord;
+
+          if (member.isActive === false) {
+            setError('Usuário desativado.');
             return;
           }
-          onLogin({ username: normalizedUser, role: Role.COMPANY, name: companyData.name, companyId: companyData.id });
-          return;
+
+          const salt = member.passwordSalt || '';
+          const inputHash = await safeHashPassword(password, salt);
+          if (member.password === password || member.password === inputHash) {
+            if (member.storeId) {
+              const storeSnap = await getDoc(doc(db, "stores", member.storeId));
+              if (!storeSnap.exists()) {
+                setError('Unidade não encontrada.');
+                return;
+              }
+              const storeData = storeSnap.data() as Store;
+              if (storeData.isBlocked) {
+                setError('Unidade bloqueada.');
+                return;
+              }
+            }
+
+            onLogin({
+              username: normalizedUser,
+              role: member.role,
+              name: member.name,
+              companyId: normalizedCompanyId,
+              storeId: member.storeId
+            });
+            return;
+          }
         }
       }
 
-      // 3. BUSCA LOJA (STORE ADMIN)
-      const qStoreAdmin = query(collection(db, "stores"), where("adminUsername", "==", normalizedUser));
-      const storeAdminSnap = await getDocs(qStoreAdmin);
-      if (!storeAdminSnap.empty) {
-        const storeDoc = storeAdminSnap.docs[0];
-        const storeData = storeDoc.data() as Store;
-        if (storeData.isBlocked) {
-          setError('Unidade bloqueada.');
-          setLoading(false);
-          return;
-        }
-        const salt = storeData.passwordSalt || '';
-        const inputHash = await safeHashPassword(password, salt);
-        if (storeData.adminPassword === password || storeData.adminPassword === inputHash) {
-          onLogin({
-            username: normalizedUser,
-            role: Role.ADMIN,
-            name: storeData.adminName,
-            storeId: storeDoc.id,
-            companyId: storeData.companyId
-          });
-          return;
+      // 3. FALLBACK LEGACY: COMPANY ADMIN (companies.adminUsername)
+      if (normalizedCompanyId) {
+        const legacyCompanySnap = await getDoc(doc(db, "companies", normalizedCompanyId));
+        if (legacyCompanySnap.exists()) {
+          const companyData = legacyCompanySnap.data() as Company;
+          const salt = companyData.passwordSalt || '';
+          const inputHash = await safeHashPassword(password, salt);
+
+          if ((companyData.adminUsername || '').toLowerCase().trim() === normalizedUser && (companyData.adminPassword === password || companyData.adminPassword === inputHash)) {
+            if (companyData.isSuspended) {
+              setError('Acesso suspenso por pendências financeiras.');
+              return;
+            }
+            onLogin({ username: normalizedUser, role: Role.COMPANY, name: companyData.name, companyId: normalizedCompanyId });
+            return;
+          }
         }
       }
 
-      // 4. BUSCA COLABORADOR POR USUARIO (AUTO-DIRECIONA PARA O SETOR)
-      const match = await findCollaboratorByUsername();
-      if (match) {
-        const storeId = match.member.storeId || match.storeId;
-        const storeRef = doc(db, "stores", storeId);
-        const storeSnap = await getDoc(storeRef);
-        if (!storeSnap.exists()) {
-          setError('Unidade não encontrada.');
-          setLoading(false);
-          return;
-        }
-        const storeData = storeSnap.data() as Store;
-        if (storeData.isBlocked) {
-          setError('Unidade bloqueada.');
-          setLoading(false);
-          return;
-        }
-
-        const salt = match.member.passwordSalt || '';
-        const inputHash = await safeHashPassword(password, salt);
-        if (match.member.password === password || match.member.password === inputHash) {
-          onLogin({
-            username: normalizedUser,
-            role: Role.USER,
-            name: match.member.name,
-            storeId,
-            companyId: storeData.companyId
-          });
-          return;
+      // 4. FALLBACK LEGACY: STORE ADMIN (stores.adminUsername) - AGORA REQUER EMPRESA
+      if (normalizedCompanyId) {
+        const qStoreAdmin = query(
+          collection(db, "stores"),
+          where("companyId", "==", normalizedCompanyId),
+          where("adminUsername", "==", normalizedUser)
+        );
+        const storeAdminSnap = await getDocs(qStoreAdmin);
+        if (!storeAdminSnap.empty) {
+          const storeDoc = storeAdminSnap.docs[0];
+          const storeData = storeDoc.data() as Store;
+          if (storeData.isBlocked) {
+            setError('Unidade bloqueada.');
+            return;
+          }
+          const salt = storeData.passwordSalt || '';
+          const inputHash = await safeHashPassword(password, salt);
+          if (storeData.adminPassword === password || storeData.adminPassword === inputHash) {
+            onLogin({
+              username: normalizedUser,
+              role: Role.ADMIN,
+              name: storeData.adminName,
+              storeId: storeDoc.id,
+              companyId: normalizedCompanyId
+            });
+            return;
+          }
         }
       }
 
-      // 5. BUSCA AGENTE DE SUPORTE GLOBAL
+      // 5. FALLBACK LEGACY: COLABORADOR EM stores_config.teamMembers - AGORA REQUER EMPRESA
+      if (normalizedCompanyId) {
+        const match = await findCollaboratorByUsernameInCompany(normalizedCompanyId);
+        if (match) {
+          const storeId = match.member.storeId || match.storeId;
+          const storeRef = doc(db, "stores", storeId);
+          const storeSnap = await getDoc(storeRef);
+          if (!storeSnap.exists()) {
+            setError('Unidade não encontrada.');
+            return;
+          }
+          const storeData = storeSnap.data() as Store;
+          if (storeData.isBlocked) {
+            setError('Unidade bloqueada.');
+            return;
+          }
+
+          const salt = match.member.passwordSalt || '';
+          const inputHash = await safeHashPassword(password, salt);
+          if (match.member.password === password || match.member.password === inputHash) {
+            onLogin({
+              username: normalizedUser,
+              role: Role.USER,
+              name: match.member.name,
+              storeId,
+              companyId: normalizedCompanyId
+            });
+            return;
+          }
+        }
+      }
+
+      // 6. BUSCA AGENTE DE SUPORTE GLOBAL (NÃO DEPENDE DE EMPRESA)
       const qSupport = query(collection(db, "support_users"), where("username", "==", normalizedUser));
       const supportSnap = await getDocs(qSupport);
       if (supportSnap && !supportSnap.empty) {
@@ -154,13 +213,14 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
             username: normalizedUser,
             role: Role.SUPPORT,
             name: supportData.name,
+            companyId: supportData.companyId || 'ANPORT',
             canCreateCompany: supportData.canCreateCompany === true
           });
           return;
         }
       }
 
-      // 6. SUPERADMIN DINÂMICO (REGRESSÃO / OPERAÇÃO)
+      // 7. SUPERADMIN DINÂMICO (REGRESSÃO / OPERAÇÃO)
       const qDynamicSuperAdmin = query(collection(db, "super_admin_users"), where("username", "==", normalizedUser));
       const dynamicSuperAdminSnap = await getDocs(qDynamicSuperAdmin);
       if (dynamicSuperAdminSnap && !dynamicSuperAdminSnap.empty) {
@@ -187,6 +247,8 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
 
       if (hashUnavailableDetected) {
         setError('Conexão via IP HTTP pode bloquear login com senha criptografada. Use localhost no PC ou HTTPS para celular.');
+      } else if (!normalizedCompanyId) {
+        setError('Informe a empresa para acessar.');
       } else {
         setError('Credenciais inválidas.');
       }
@@ -220,6 +282,13 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
 
         <form onSubmit={handleLogin} className="space-y-4">
           <div className="space-y-1">
+            <label className="text-[9px] font-black text-slate-600 uppercase ml-1 tracking-widest">Acesso por Empresa</label>
+            <input 
+              placeholder="EMPRESA (EX: ACME01)"
+              className="w-full bg-slate-800 border border-slate-700 px-5 py-4 rounded-2xl outline-none text-white focus:ring-2 focus:ring-blue-600 transition-all mb-2"
+              value={companyId}
+              onChange={e => setCompanyId(e.target.value)}
+            />
             <label className="text-[9px] font-black text-slate-600 uppercase ml-1 tracking-widest">Identidade Pessoal</label>
             <input 
               required 

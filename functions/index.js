@@ -205,7 +205,8 @@ const hashPasswordSha256 = (password, salt) => {
 
 exports.loginWithPassword = onCall(
   {
-    region: DEFAULT_REGION
+    region: DEFAULT_REGION,
+    cors: true
   },
   async (request) => {
     const payload = request.data || {};
